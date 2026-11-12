@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { VoiceTextarea } from "@/components/voice-input";
 import type { ParsedRequest } from "@/lib/ai";
 import { PRESETS } from "@/lib/presets";
+import { needsTranslating, quickParse } from "@/lib/quick-parse";
 import { categorise, CATEGORIES, type Category } from "@/lib/requests";
 import { cn } from "@/lib/utils";
 
@@ -71,6 +72,10 @@ export function NewRequestDialog({
   const [aiFrom, setAiFrom] = useState<"voice" | "note">("voice");
   const [aiError, setAiError] = useState<string | null>(null);
   const [filled, setFilled] = useState<Field[]>([]);
+  // Fields staff set by hand: typing never overrides these.
+  const [manual, setManual] = useState<Field[]>([]);
+  // Fields filled from what was typed: retyping can change or clear them.
+  const [fromTyping, setFromTyping] = useState<Field[]>([]);
   const [seenNonce, setSeenNonce] = useState<string | null>(null);
 
   const reset = () => {
@@ -83,6 +88,8 @@ export function NewRequestDialog({
     setAi(null);
     setAiError(null);
     setFilled([]);
+    setManual([]);
+    setFromTyping([]);
   };
 
   if (prefill && prefill.nonce !== seenNonce) {
@@ -94,10 +101,43 @@ export function NewRequestDialog({
   }
 
   // Staff touched a field: it's theirs now, drop the AI highlight.
-  const touch = (f: Field) => setFilled((cur) => cur.filter((x) => x !== f));
+  const touch = (f: Field) => {
+    setFilled((cur) => cur.filter((x) => x !== f));
+    setFromTyping((cur) => cur.filter((x) => x !== f));
+    if (f !== "note") setManual((cur) => (cur.includes(f) ? cur : [...cur, f]));
+  };
+
+  // As staff type, fill in room, common request, team and urgency straight away (no AI, no wait).
+  const fillFromTyping = (v: string) => {
+    const q = quickParse(v);
+    const free = (f: Field) => !manual.includes(f) && (fromTyping.includes(f) || !filled.includes(f));
+    const got: Field[] = [];
+    if (free("room")) {
+      setRoom(q.room ?? (fromTyping.includes("room") ? "" : room));
+      if (q.room) got.push("room");
+    }
+    if (free("preset")) {
+      setPreset(q.presetId ?? (fromTyping.includes("preset") ? null : preset));
+      if (q.presetId) got.push("preset");
+    }
+    if (free("category") && !manual.includes("preset") && v.trim()) {
+      setCategoryOverride(q.category);
+      got.push("category");
+    }
+    if (free("urgent")) {
+      setUrgent(q.urgent || (!fromTyping.includes("urgent") && urgent));
+      if (q.urgent) got.push("urgent");
+    }
+    setFromTyping(got);
+    setFilled((cur) => [...cur.filter((f) => f !== "note" && !free(f)), ...got]);
+  };
+
+  // Another language: let the AI translate it once they pause typing.
+  const noteToTranslate = phase === "idle" && needsTranslating(note) && note.trim().length > 3 ? note.trim() : null;
 
   const applyAi = (r: ParsedRequest) => {
     const got: Field[] = ["note", "category"];
+    setFromTyping([]);
     setAi(r);
     setNote(r.request);
     setCategoryOverride(r.category);
@@ -139,6 +179,13 @@ export function NewRequestDialog({
     }
   };
 
+  useEffect(() => {
+    if (!noteToTranslate) return;
+    const t = setTimeout(() => understand(noteToTranslate), 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteToTranslate]);
+
   // "N" opens the form from anywhere on the board.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -153,7 +200,8 @@ export function NewRequestDialog({
   }, []);
 
   const p = PRESETS.find((x) => x.id === preset) ?? null;
-  const n = note.trim();
+  // If the room came from the note, don't repeat it in the request text.
+  const n = fromTyping.includes("room") ? quickParse(note).text : note.trim();
   const text = n || p?.text || "";
   const category = categoryOverride ?? p?.category ?? (n ? categorise(n) : null);
   const ready = room.trim() !== "" && text !== "" && phase !== "thinking";
@@ -194,7 +242,7 @@ export function NewRequestDialog({
         <DialogContent className="max-h-[calc(100dvh-2rem)] gap-5 overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>New request</DialogTitle>
-            <DialogDescription>Type or speak it, in any language. The guest can follow it on their phone.</DialogDescription>
+            <DialogDescription>Type or speak it, in any language. Room, team and urgency fill in as you go.</DialogDescription>
           </DialogHeader>
 
           {/* Type or speak (mic in the box). The AI fills in the rest. */}
@@ -204,18 +252,11 @@ export function NewRequestDialog({
                 What&apos;s needed?
               </label>
               {phase === "thinking" ? (
-                <span className="text-xs text-muted-foreground">Filling in the rest…</span>
+                <span className="text-xs text-muted-foreground">
+                  {aiFrom === "note" ? "Translating…" : "Filling in the rest…"}
+                </span>
               ) : (
-                n &&
-                !filled.includes("note") && (
-                  <button
-                    type="button"
-                    onClick={() => understand(room ? `room ${room}: ${n}` : n)}
-                    className="shrink-0 text-xs font-medium text-brand-strong hover:underline"
-                  >
-                    Fill the rest from this
-                  </button>
-                )
+                fromTyping.length > 0 && <span className="text-xs text-brand-strong">Filled in as you type</span>
               )}
             </div>
             <VoiceTextarea
@@ -226,6 +267,7 @@ export function NewRequestDialog({
               onChange={(v) => {
                 setNote(v);
                 touch("note");
+                fillFromTyping(v);
               }}
               onVoice={(r) => {
                 setAiFrom("voice");
