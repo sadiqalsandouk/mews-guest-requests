@@ -1,0 +1,252 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-inter), system-ui, sans-serif;
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-strong: var(--brand-strong);
+  --color-status-new: var(--status-new);
+  --color-status-progress: var(--status-progress);
+  --color-status-done: var(--status-done);
+  --color-status-urgent: var(--status-urgent);
+  --color-cream: var(--mews-cream);
+  --color-orchid: var(--mews-orchid);
+  --color-orchid-tint: var(--mews-orchid-tint);
+  --color-slate: var(--mews-slate);
+  --color-dot-green: var(--mews-dot-green);
+  --color-dot-amber: var(--mews-dot-amber);
+  --color-dot-red: var(--mews-dot-red);
+  --color-positive: var(--mews-positive);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/*
+ * Mews-inspired tokens.
+ * Colours come from mews.com's live CSS (2026 Koto rebrand): hot pink as the
+ * brand asset, black and white as the base, soft pastels for support.
+ * Brand rule from the guidelines: highlight colours stay under ~10% of a screen.
+ * Söhne is the brand typeface (licensed); Inter stands in here.
+ */
+:root {
+  /* Raw Mews palette */
+  --mews-black: #1c1b1c;
+  --mews-charcoal: #2d2c37;
+  --mews-grey: #f4f5f9;
+  --mews-faded-grey: #d6d9e7;
+  --mews-supporting-grey: #c4c9dd;
+  --mews-cream: #fffcf6;
+  --mews-pink: #ff83da;
+  --mews-pink-light: #ffc5ee;
+  --mews-pink-lightest: #f7e1f7;
+  --mews-pink-deep: #c32b96;
+  --mews-blue: #d2f4ff;
+  --mews-green: #d1f9d6;
+  --mews-yellow: #e8ff5b;
+  --mews-yellow-light: #effd91;
+  --mews-orange: #ff5303;
+
+  /* Product UI accents, approximated by eye from Mews product screenshots
+     (PMS timeline, RMS dashboard, billing/POS). Not official values. */
+  --mews-orchid: #d46fc4;      /* accent bars, active tab, primary chart series */
+  --mews-orchid-tint: #fcf0fa; /* "today" column, selected row */
+  --mews-slate: #8a8aa3;       /* secondary chart series */
+  --mews-dot-green: #3d8b40;
+  --mews-dot-amber: #f0b27a;
+  --mews-dot-red: #b42318;
+  --mews-positive: #2f9e6e;
+
+  /* Semantic (shadcn) */
+  --background: #ffffff;
+  --foreground: var(--mews-black);
+  --card: #ffffff;
+  --card-foreground: var(--mews-black);
+  --popover: #ffffff;
+  --popover-foreground: var(--mews-black);
+  --primary: var(--mews-black);
+  --primary-foreground: #ffffff;
+  --secondary: var(--mews-grey);
+  --secondary-foreground: var(--mews-black);
+  --muted: var(--mews-grey);
+  --muted-foreground: #5c5b66;
+  --accent: var(--mews-orchid-tint);
+  --accent-foreground: var(--mews-black);
+  --destructive: #c4320a;
+  --border: var(--mews-faded-grey);
+  --input: var(--mews-supporting-grey);
+  --ring: var(--mews-pink);
+  --brand: var(--mews-pink);
+  --brand-foreground: var(--mews-black);
+  --brand-strong: var(--mews-pink-deep);
+  --status-new: var(--mews-blue);
+  --status-progress: var(--mews-yellow-light);
+  --status-done: var(--mews-green);
+  --status-urgent: var(--mews-orange);
+  --chart-1: var(--mews-orchid);
+  --chart-2: var(--mews-slate);
+  --chart-3: var(--mews-supporting-grey);
+  --chart-4: var(--mews-orange);
+  --chart-5: var(--mews-yellow);
+  --radius: 0.5rem;
+  --sidebar: var(--mews-black);
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: var(--mews-pink);
+  --sidebar-primary-foreground: var(--mews-black);
+  --sidebar-accent: var(--mews-charcoal);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #ffffff1a;
+  --sidebar-ring: var(--mews-pink);
+}
+
+.dark {
+  --background: #121112;
+  --foreground: #f4f5f9;
+  --card: var(--mews-black);
+  --card-foreground: #f4f5f9;
+  --popover: var(--mews-black);
+  --popover-foreground: #f4f5f9;
+  --primary: var(--mews-pink);
+  --primary-foreground: var(--mews-black);
+  --secondary: var(--mews-charcoal);
+  --secondary-foreground: #f4f5f9;
+  --muted: var(--mews-charcoal);
+  --muted-foreground: #a9a8b5;
+  --accent: #3a2236;
+  --accent-foreground: #f4f5f9;
+  --destructive: #ff7a50;
+  --border: #ffffff1a;
+  --input: #ffffff26;
+  --ring: var(--mews-pink);
+  --brand: var(--mews-pink);
+  --brand-foreground: var(--mews-black);
+  --brand-strong: var(--mews-pink);
+  --sidebar: #0b0a0b;
+  --sidebar-accent: var(--mews-charcoal);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+  /* Anything clickable shows the pointer (Tailwind v4 resets buttons to default). */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"],
+  a[href],
+  select:not(:disabled),
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+}
+/* ---------- Guest tracker motion (inspired by Uber Eats / Deliveroo trackers) ---------- */
+@keyframes gr-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+@keyframes gr-travel {
+  0% { left: 0%; }
+  85%, 100% { left: 100%; }
+}
+@keyframes gr-dash {
+  to { stroke-dashoffset: -12; }
+}
+@keyframes gr-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes gr-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes gr-ring {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+@keyframes gr-wiggle {
+  0%, 60%, 100% { transform: rotate(0); }
+  10%, 30% { transform: rotate(-14deg); }
+  20%, 40% { transform: rotate(14deg); }
+}
+@keyframes gr-confetti {
+  0% { transform: translate3d(0, -12px, 0) rotate(0); opacity: 1; }
+  100% { transform: translate3d(var(--dx, 0), 190px, 0) rotate(560deg); opacity: 0; }
+}
+@keyframes gr-rise {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.gr-shimmer { animation: gr-shimmer 1.6s ease-in-out infinite; }
+.gr-travel { animation: gr-travel 3.2s cubic-bezier(0.45, 0, 0.25, 1) infinite; }
+.gr-dash { animation: gr-dash 0.8s linear infinite; }
+.gr-pop { animation: gr-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.gr-float { animation: gr-float 2.4s ease-in-out infinite; }
+.gr-ring { animation: gr-ring 1.8s ease-out infinite; }
+.gr-wiggle { animation: gr-wiggle 2.2s ease-in-out infinite; transform-origin: 50% 10%; }
+.gr-confetti { animation: gr-confetti 1.6s cubic-bezier(0.2, 0.6, 0.4, 1) forwards; }
+.gr-rise { animation: gr-rise 0.4s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gr-shimmer, .gr-travel, .gr-dash, .gr-pop, .gr-float, .gr-ring, .gr-wiggle, .gr-confetti, .gr-rise {
+    animation: none;
+  }
+}
+
+/* SVG groups use transforms rather than the HTML traveller's left offset. */
+@keyframes gr-svg-travel {
+  0% { transform: translateX(0); }
+  85%, 100% { transform: translateX(44px); }
+}
+g.gr-travel { animation-name: gr-svg-travel; }
