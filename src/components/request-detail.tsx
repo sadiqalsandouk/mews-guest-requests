@@ -64,7 +64,7 @@ function activity(r: GuestRequest, now: number): Event[] {
   if (r.stepAt?.confirmed) ev.push({ at: r.stepAt.confirmed, who: "Guest", text: "confirmed it's fixed", tone: "good" });
   if (r.rating && r.ratedAt)
     ev.push({ at: r.ratedAt, who: "Guest", text: `rated it ${r.rating}★`, tone: r.rating <= 3 ? "bad" : "good" });
-  if (r.tip && r.tippedAt) ev.push({ at: r.tippedAt, who: "Guest", text: `tipped ${staff} €${r.tip}`, tone: "good" });
+  if (r.tip && r.tippedAt) ev.push({ at: r.tippedAt, who: "Guest", text: `tipped ${staff} £${r.tip}`, tone: "good" });
   if (r.followedUpAt) ev.push({ at: r.followedUpAt, who: "Duty manager", text: "followed up with the guest", tone: "good" });
   for (const h of r.history ?? []) ev.push({ at: h.at, who: h.by, text: h.text });
   for (const n of r.notes ?? []) ev.push({ at: n.at, who: n.by, text: n.text, tone: "note" });
@@ -157,7 +157,7 @@ export function RequestDetail({
             <div className={cn("flex flex-col gap-2 rounded-md bg-muted p-3 text-sm", needsFollowUp(r) && "border-l-4 border-dot-red")}>
               <div className="flex items-center gap-2">
                 <Stars value={r.rating} />
-                {r.tip && <Badge variant="outline" className="bg-background">€{r.tip} tip</Badge>}
+                {r.tip && <Badge variant="outline" className="bg-background">£{r.tip} tip</Badge>}
               </div>
               {!!r.ratingTags?.length && (
                 <div className="flex flex-wrap gap-1">

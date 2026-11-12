@@ -608,7 +608,7 @@ function TipCard({ r }: { r: GuestRequest }) {
           <CheckIcon className="size-5" />
         </span>
         <p className="text-sm">
-          <span className="font-semibold">€{amount ?? r.tip} tip sent to {name}.</span> Thank you!
+          <span className="font-semibold">£{amount ?? r.tip} tip sent to {name}.</span> Thank you!
         </p>
       </div>
     );
@@ -632,7 +632,7 @@ function TipCard({ r }: { r: GuestRequest }) {
               amount === a ? "border-foreground bg-foreground text-background" : "hover:bg-muted",
             )}
           >
-            €{a}
+            £{a}
           </button>
         ))}
       </div>
@@ -641,7 +641,7 @@ function TipCard({ r }: { r: GuestRequest }) {
         disabled={!amount || phase === "paying"}
         className="flex h-11 items-center justify-center rounded-md bg-black text-base font-medium text-white transition-opacity disabled:opacity-40"
       >
-        {phase === "paying" ? "Paying…" : amount ? `Pay €${amount} with Apple Pay` : "Pay with Apple Pay"}
+        {phase === "paying" ? "Paying…" : amount ? `Pay £${amount} with Apple Pay` : "Pay with Apple Pay"}
       </button>
       <p className="text-center text-xs text-muted-foreground">Demo: no money is taken.</p>
     </div>
