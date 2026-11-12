@@ -32,7 +32,7 @@ export type GuestRequest = {
   followedUp?: boolean;
   ratedAt?: number;
   followedUpAt?: number;
-  // Optional tip after a good rating (mock payment, whole euros).
+  // Optional tip after a good rating (mock payment, whole pounds).
   tip?: number;
   tippedAt?: number;
   // Reassignments and similar, for the activity history.
