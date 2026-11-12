@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { VoiceTextarea } from "@/components/voice-input";
 import { useCanRecord } from "@/lib/use-recorder";
 import { HOTEL_NAME } from "@/lib/hotel";
-import { BAD_TAGS, GOOD_TAGS, staffName, stepIndex, type Category, type GuestRequest, type Status } from "@/lib/requests";
+import { BAD_TAGS, GOOD_TAGS, TIP_AMOUNTS, staffName, stepIndex, type Category, type GuestRequest, type Status } from "@/lib/requests";
 import { patchRequest, sendAction, useLive } from "@/lib/use-live";
 import { useNow } from "@/lib/use-now";
 import { cn } from "@/lib/utils";
@@ -463,7 +463,6 @@ function RatingSheet({
     setPhase("sending");
     await patchRequest(r.id, { action: "rate", rating: stars, comment, tags });
     setPhase("thanks");
-    setTimeout(onClose, 1800);
   };
 
   // Esc closes the sheet (and doesn't also leave the guest page).
@@ -486,18 +485,24 @@ function RatingSheet({
           role="dialog"
           aria-modal="true"
           aria-label={`How was ${name}'s help?`}
-          className="relative w-full animate-in rounded-2xl bg-background shadow-xl duration-200 fade-in zoom-in-95"
+          className="relative max-h-full w-full animate-in overflow-y-auto rounded-2xl bg-background shadow-xl duration-200 fade-in zoom-in-95"
         >
 
         {phase === "thanks" ? (
-          <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-            <span className="gr-pop flex size-14 items-center justify-center rounded-full bg-dot-green text-white">
-              <CheckIcon className="size-7" />
-            </span>
-            <p className="text-lg font-semibold">Thanks for your feedback</p>
-            <p className="text-sm text-muted-foreground">
-              {good ? `We'll pass it on to ${name}.` : "Sorry it wasn't better. The duty manager will be in touch."}
-            </p>
+          <div className="flex flex-col gap-5 px-6 pt-8 pb-5">
+            <div className="flex flex-col items-center gap-2 text-center">
+              <span className="gr-pop flex size-14 items-center justify-center rounded-full bg-dot-green text-white">
+                <CheckIcon className="size-7" />
+              </span>
+              <p className="text-lg font-semibold">Thanks for your feedback</p>
+              <p className="text-sm text-muted-foreground">
+                {good ? `We'll pass it on to ${name}.` : "Sorry it wasn't better. The duty manager will be in touch."}
+              </p>
+            </div>
+            {good && <TipCard r={r} />}
+            <Button variant="ghost" onClick={onClose}>
+              Done
+            </Button>
           </div>
         ) : (
           <div className="flex flex-col gap-5 px-6 pt-6 pb-5">
@@ -576,6 +581,69 @@ function RatingSheet({
         )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ---------------- Tip: after a good rating ---------------- */
+
+// Mock Apple Pay tip, for guests who want to tip but carry no cash. No money moves.
+function TipCard({ r }: { r: GuestRequest }) {
+  const name = staffName(r);
+  const [amount, setAmount] = useState<number | null>(null);
+  const [phase, setPhase] = useState<"pick" | "paying" | "sent">(r.tip ? "sent" : "pick");
+
+  const pay = async () => {
+    if (!amount) return;
+    setPhase("paying");
+    await new Promise((ok) => setTimeout(ok, 1200)); // stand-in for the Apple Pay sheet
+    await patchRequest(r.id, { action: "tip", amount });
+    setPhase("sent");
+  };
+
+  if (phase === "sent") {
+    return (
+      <div className="gr-pop flex items-center gap-3 rounded-lg border bg-orchid-tint p-4">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-dot-green text-white">
+          <CheckIcon className="size-5" />
+        </span>
+        <p className="text-sm">
+          <span className="font-semibold">€{amount ?? r.tip} tip sent to {name}.</span> Thank you!
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="gr-rise flex flex-col gap-3 rounded-lg border p-4">
+      <div>
+        <p className="font-semibold">Leave {name} a tip?</p>
+        <p className="text-sm text-muted-foreground">No cash needed. Optional.</p>
+      </div>
+      <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Tip amount">
+        {TIP_AMOUNTS.map((a) => (
+          <button
+            key={a}
+            role="radio"
+            aria-checked={amount === a}
+            onClick={() => setAmount(a)}
+            disabled={phase === "paying"}
+            className={cn(
+              "h-11 rounded-md border text-base font-medium transition-colors",
+              amount === a ? "border-foreground bg-foreground text-background" : "hover:bg-muted",
+            )}
+          >
+            €{a}
+          </button>
+        ))}
+      </div>
+      <button
+        onClick={pay}
+        disabled={!amount || phase === "paying"}
+        className="flex h-11 items-center justify-center rounded-md bg-black text-base font-medium text-white transition-opacity disabled:opacity-40"
+      >
+        {phase === "paying" ? "Paying…" : amount ? `Pay €${amount} with Apple Pay` : "Pay with Apple Pay"}
+      </button>
+      <p className="text-center text-xs text-muted-foreground">Demo: no money is taken.</p>
     </div>
   );
 }

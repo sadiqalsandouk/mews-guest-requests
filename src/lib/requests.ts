@@ -32,6 +32,9 @@ export type GuestRequest = {
   followedUp?: boolean;
   ratedAt?: number;
   followedUpAt?: number;
+  // Optional tip after a good rating (mock payment, whole euros).
+  tip?: number;
+  tippedAt?: number;
   // Reassignments and similar, for the activity history.
   history?: { at: number; by: string; text: string }[];
   // Internal staff notes (not shown to the guest).
@@ -331,6 +334,17 @@ export function rateRequest(id: string, rating: number, comment?: string, tags: 
   return r;
 }
 
+export const TIP_AMOUNTS = [2, 5, 10];
+
+// Mock tip (no money moves). Only once the request is done, and only once.
+export function tipRequest(id: string, amount: number): GuestRequest | undefined {
+  const r = getRequest(id);
+  if (!r || r.status !== "confirmed" || r.tip) return r;
+  r.tip = amount;
+  r.tippedAt = Date.now();
+  return r;
+}
+
 // Demo only: jump a request straight to a stage (the guest page's stepper).
 // Fills in times for the steps up to it and clears the ones after.
 export function setStage(id: string, status: Status): GuestRequest | undefined {
@@ -352,6 +366,8 @@ export function setStage(id: string, status: Status): GuestRequest | undefined {
   r.followedUp = undefined;
   r.ratedAt = undefined;
   r.followedUpAt = undefined;
+  r.tip = undefined;
+  r.tippedAt = undefined;
   r.assignee = upto >= 1 ? (r.assignee ?? `${STAFF[r.category]} · ${r.category}`) : undefined;
   if (upto < 1) r.history = undefined;
   r.fixedAt = upto >= stepIndex("fixed") ? stepAt.fixed : undefined;
