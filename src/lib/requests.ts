@@ -32,6 +32,8 @@ export type GuestRequest = {
   followedUp?: boolean;
   ratedAt?: number;
   followedUpAt?: number;
+  // Reassignments and similar, for the activity history.
+  history?: { at: number; by: string; text: string }[];
   // Internal staff notes (not shown to the guest).
   notes?: { at: number; by: string; text: string }[];
   // When each step happened (for the guest's timeline).
@@ -49,6 +51,18 @@ export const STAFF: Record<Category, string> = {
   Housekeeping: "Aisha",
   "Front desk": "Lena",
 };
+
+// Who can be assigned, by team (fictional demo staff). The first member of
+// each team is the default on-call person above.
+export const TEAMS: { team: Category; label: string; members: string[] }[] = [
+  { team: "Maintenance", label: "Maintenance · engineers", members: ["Tomás", "Priya", "Omar"] },
+  { team: "Housekeeping", label: "Housekeeping", members: ["Aisha", "Grace", "Joseph"] },
+  { team: "Front desk", label: "Front desk", members: ["Lena", "Marco"] },
+];
+
+// The person actually on it (assignee is stored as "Name · Team").
+export const staffName = (r: Pick<GuestRequest, "assignee" | "category">) =>
+  r.assignee?.split(" · ")[0] ?? STAFF[r.category];
 
 export const CATEGORIES: Category[] = ["Maintenance", "Housekeeping", "Front desk"];
 
@@ -271,6 +285,24 @@ export type Action = "advance" | "confirm" | "reopen" | "followUp";
 // Ticket key shown to staff, like a Jira issue key.
 export const requestKey = (r: Pick<GuestRequest, "id">) => `REQ-${r.id}`;
 
+// Assign (or reassign) a request to a named team member.
+export function assignTo(id: string, name: string, by: string): GuestRequest | undefined {
+  const r = getRequest(id);
+  const team = TEAMS.find((t) => t.members.includes(name));
+  if (!r || !team) return r;
+  const next = `${name} · ${team.team}`;
+  if (r.assignee === next) return r;
+  const now = Date.now();
+  if (r.status === "received") {
+    r.status = "assigned";
+    r.stepAt = { ...r.stepAt, assigned: now };
+  } else {
+    r.history = [...(r.history ?? []), { at: now, by, text: `reassigned it to ${name} (${team.team})` }];
+  }
+  r.assignee = next;
+  return r;
+}
+
 export function addNote(id: string, text: string, by: string): GuestRequest | undefined {
   const r = getRequest(id);
   if (!r) return undefined;
@@ -320,7 +352,8 @@ export function setStage(id: string, status: Status): GuestRequest | undefined {
   r.followedUp = undefined;
   r.ratedAt = undefined;
   r.followedUpAt = undefined;
-  r.assignee = upto >= 1 ? `${STAFF[r.category]} · ${r.category}` : undefined;
+  r.assignee = upto >= 1 ? (r.assignee ?? `${STAFF[r.category]} · ${r.category}`) : undefined;
+  if (upto < 1) r.history = undefined;
   r.fixedAt = upto >= stepIndex("fixed") ? stepAt.fixed : undefined;
   r.closedAt = status === "confirmed" ? stepAt.confirmed : undefined;
   return r;

@@ -398,6 +398,7 @@ export function StaffBoard({ fullScreen = false }: { fullScreen?: boolean }) {
                   <span className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                     <span>
                       {r.category} · {minutesAgo(r, now)}m ago
+                      {r.assignee && <> · {r.assignee.split(" · ")[0]}</>}
                     </span>
                     <span className="@xl/list:hidden">· {statusOf(r, now).label}</span>
                     {r.original && <LanguageIcon className="size-3.5" title={`Translated from ${r.original.lang}`} />}

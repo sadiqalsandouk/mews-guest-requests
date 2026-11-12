@@ -1,5 +1,5 @@
 import { connection, NextResponse, type NextRequest } from "next/server";
-import { addNote, applyAction, getRequest, rateRequest, setStage, STEPS, withOverdue, type Action, type Status } from "@/lib/requests";
+import { addNote, applyAction, assignTo, TEAMS, getRequest, rateRequest, setStage, STEPS, withOverdue, type Action, type Status } from "@/lib/requests";
 import { readStore, writeStore } from "@/lib/store-sync";
 
 const ACTIONS: Action[] = ["advance", "confirm", "reopen", "followUp"];
@@ -16,7 +16,7 @@ export async function GET(_req: NextRequest, ctx: RouteContext<"/api/requests/[i
 }
 
 export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/requests/[id]">) {
-  const { action, status, rating, comment, tags, text } = await req.json();
+  const { action, status, rating, comment, tags, text, name } = await req.json();
   const id = (await ctx.params).id;
 
   // Validate first, then change the demo state in one go.
@@ -26,14 +26,19 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/requests/[
   if (action === "rate" && (!Number.isInteger(rating) || rating < 1 || rating > 5)) {
     return NextResponse.json({ error: "rating must be 1 to 5" }, { status: 400 });
   }
+  if (action === "assign" && !TEAMS.some((t) => t.members.includes(name))) {
+    return NextResponse.json({ error: "unknown team member" }, { status: 400 });
+  }
   const isSet = action === "set" && STEPS.some((s) => s.key === status);
-  if (!["note", "rate"].includes(action) && !isSet && !ACTIONS.includes(action)) {
+  if (!["note", "rate", "assign"].includes(action) && !isSet && !ACTIONS.includes(action)) {
     return NextResponse.json({ error: "unknown action" }, { status: 400 });
   }
 
   const r = await writeStore(() => {
     let changed;
-    if (action === "note") {
+    if (action === "assign") {
+      changed = assignTo(id, name, "Duty manager");
+    } else if (action === "note") {
       changed = addNote(id, text.trim().slice(0, 1000), "Duty manager");
     } else if (action === "rate") {
       changed = rateRequest(

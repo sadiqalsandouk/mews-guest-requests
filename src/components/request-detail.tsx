@@ -3,6 +3,7 @@
 import { useState } from "react";
 import {
   CheckIcon,
+  ChevronDownIcon,
   LoggedByDeskIcon,
   RepeatIssueIcon,
   StatusOverdueIcon,
@@ -14,11 +15,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   isOverdue,
   isRepeat,
   needsFollowUp,
   requestKey,
-  STAFF,
+  staffName,
+  TEAMS,
   STEPS,
   stepIndex,
   type GuestRequest,
@@ -36,7 +47,7 @@ type Event = { at: number; who: string; text: string; tone?: "bad" | "good" | "n
 
 // Everything that happened to the request, newest first (like Jira's activity).
 function activity(r: GuestRequest, now: number): Event[] {
-  const staff = STAFF[r.category];
+  const staff = staffName(r);
   const ev: Event[] = [
     {
       at: r.createdAt,
@@ -54,6 +65,7 @@ function activity(r: GuestRequest, now: number): Event[] {
   if (r.rating && r.ratedAt)
     ev.push({ at: r.ratedAt, who: "Guest", text: `rated it ${r.rating}★`, tone: r.rating <= 3 ? "bad" : "good" });
   if (r.followedUpAt) ev.push({ at: r.followedUpAt, who: "Duty manager", text: "followed up with the guest", tone: "good" });
+  for (const h of r.history ?? []) ev.push({ at: h.at, who: h.by, text: h.text });
   for (const n of r.notes ?? []) ev.push({ at: n.at, who: n.by, text: n.text, tone: "note" });
   return ev.sort((a, b) => b.at - a.at);
 }
@@ -240,17 +252,8 @@ export function RequestDetail({
 
         <dl className="grid grid-cols-[96px_1fr] gap-x-3 gap-y-2.5 rounded-lg border p-4 text-sm">
           <dt className="text-muted-foreground">Assignee</dt>
-          <dd className="flex items-center gap-2">
-            {r.assignee ? (
-              <>
-                <span className="flex size-5 items-center justify-center rounded-full bg-foreground text-[10px] font-semibold text-background">
-                  {r.assignee[0]}
-                </span>
-                {r.assignee.split(" · ")[0]}
-              </>
-            ) : (
-              <span className="text-muted-foreground">Unassigned</span>
-            )}
+          <dd>
+            <AssigneePicker r={r} onDone={done} />
           </dd>
           <dt className="text-muted-foreground">Department</dt>
           <dd>{r.category}</dd>
@@ -281,6 +284,65 @@ export function RequestDetail({
         </dl>
       </aside>
     </div>
+  );
+}
+
+// Pick who's on it, grouped by team; the request's own team comes first.
+function AssigneePicker({ r, onDone }: { r: GuestRequest; onDone: () => void }) {
+  const current = r.assignee?.split(" · ")[0];
+  const teams = [...TEAMS].sort((a, b) => Number(b.team === r.category) - Number(a.team === r.category));
+  const avatar = (name: string, dark: boolean) => (
+    <span
+      className={cn(
+        "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
+        dark ? "bg-foreground text-background" : "bg-muted text-foreground",
+      )}
+      aria-hidden
+    >
+      {name[0]}
+    </span>
+  );
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="-mx-1.5 -my-1 flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted data-popup-open:bg-muted">
+        {current ? (
+          <>
+            {avatar(current, true)}
+            <span className="flex-1 truncate">{current}</span>
+          </>
+        ) : (
+          <span className="flex-1 text-muted-foreground">Unassigned</span>
+        )}
+        <ChevronDownIcon className="size-4 text-muted-foreground" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-60">
+        {teams.map((t, i) => (
+          <div key={t.team}>
+            {i > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="flex items-center justify-between">
+                {t.label}
+                {t.team === r.category && <span className="font-normal text-brand-strong">Suggested</span>}
+              </DropdownMenuLabel>
+              {t.members.map((m) => (
+                <DropdownMenuItem
+                  key={m}
+                  onClick={async () => {
+                    if (m === current) return;
+                    await patchRequest(r.id, { action: "assign", name: m });
+                    onDone();
+                  }}
+                >
+                  {avatar(m, m === current)}
+                  <span className="flex-1">{m}</span>
+                  {m === current && <CheckIcon className="text-orchid" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </div>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

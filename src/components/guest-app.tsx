@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { VoiceTextarea } from "@/components/voice-input";
 import { useCanRecord } from "@/lib/use-recorder";
 import { HOTEL_NAME } from "@/lib/hotel";
-import { BAD_TAGS, GOOD_TAGS, STAFF, stepIndex, type Category, type GuestRequest, type Status } from "@/lib/requests";
+import { BAD_TAGS, GOOD_TAGS, staffName, stepIndex, type Category, type GuestRequest, type Status } from "@/lib/requests";
 import { patchRequest, sendAction, useLive } from "@/lib/use-live";
 import { useNow } from "@/lib/use-now";
 import { cn } from "@/lib/utils";
@@ -36,7 +36,7 @@ const time = (t?: number) => (t ? new Date(t).toLocaleTimeString([], { hour: "2-
 
 // Headline + subline for each stage, written for the guest.
 function stageCopy(r: GuestRequest) {
-  const name = STAFF[r.category];
+  const name = staffName(r);
   if (r.reopened && r.status !== "confirmed" && r.status !== "fixed")
     return { title: `Sending ${name} back`, sub: "Sorry it's not sorted yet. It's now a priority." };
   switch (r.status) {
@@ -217,7 +217,7 @@ function StatusCard({ r, onOpen, onRate }: { r: GuestRequest; onOpen: () => void
     {done && !r.rating && (
       // Rate right from the card: one tap opens the sheet with that score.
       <div className="flex items-center justify-between gap-3 border-t bg-orchid-tint px-4 py-3">
-        <span className="text-sm font-medium">How was {STAFF[r.category]}&apos;s help?</span>
+        <span className="text-sm font-medium">How was {staffName(r)}&apos;s help?</span>
         <RateStars r={r} onRate={onRate} size="size-6" />
       </div>
     )}
@@ -327,7 +327,7 @@ function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
       <div className="flex items-center gap-3 rounded-lg border p-3">
         {stepIndex(r.status) >= 1 ? (
           <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background">
-            {STAFF[r.category][0]}
+            {staffName(r)[0]}
           </span>
         ) : (
           <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
@@ -345,7 +345,7 @@ function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
             </p>
           )}
           <p className="text-sm text-muted-foreground">
-            {stepIndex(r.status) >= 1 ? `${STAFF[r.category]} · ${r.category}` : r.category}
+            {stepIndex(r.status) >= 1 ? `${staffName(r)} · ${r.category}` : r.category}
             {r.source === "staff" && " · logged by the front desk"}
           </p>
         </div>
@@ -358,7 +358,7 @@ function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
           const reached = stepIndex(r.status) >= stepIndex(s);
           const label = {
             received: "Request received",
-            assigned: `Passed to ${STAFF[r.category]}`,
+            assigned: `Passed to ${staffName(r)}`,
             on_the_way: "On the way",
             fixed: "Marked as fixed",
             confirmed: "You confirmed it's fixed",
@@ -409,7 +409,7 @@ function RateStars({ r, onRate, size = "size-7" }: { r: GuestRequest; onRate: Ra
 
 // Inline in the tracker: the ask before rating, a thank-you after.
 function RateInline({ r, onRate }: { r: GuestRequest; onRate: RateFn }) {
-  const name = STAFF[r.category];
+  const name = staffName(r);
   if (r.rating) {
     return (
       <div className="gr-rise flex flex-col gap-1 rounded-lg border p-4">
@@ -441,7 +441,7 @@ function RatingSheet({
   initial: number;
   onClose: () => void;
 }) {
-  const name = STAFF[r.category];
+  const name = staffName(r);
   const [stars, setStars] = useState(initial);
   const [hover, setHover] = useState(0);
   const [tags, setTags] = useState<string[]>([]);
@@ -698,7 +698,7 @@ function StepperPanel({ r }: { r: GuestRequest }) {
 
 function StageArt({ r }: { r: GuestRequest }) {
   const Icon = DEPT_ICON[r.category];
-  const name = STAFF[r.category];
+  const name = staffName(r);
   return <div key={r.status} className="relative flex h-40 items-center justify-center overflow-hidden rounded-xl bg-orchid-tint">
     {r.status === "received" && <ReceivedArt />}
     {r.status === "assigned" && <div className="flex items-center gap-4"><AssignedArt /><div className="flex flex-col gap-1.5"><span className="rounded-md bg-background px-3 py-1.5 text-sm font-medium shadow-sm">{name}</span><span className="flex items-center gap-1.5 rounded-md bg-background px-3 py-1.5 text-xs text-muted-foreground shadow-sm"><Icon className="size-3.5" /> {r.category}</span></div></div>}
