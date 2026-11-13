@@ -184,7 +184,11 @@ export function categorise(text: string): Category {
 
 type Store = { requests: GuestRequest[]; nextId: number; limits?: Limits; lastWrite?: number };
 
-function seed(): Store {
+// The live demo starts from a blank board: the panel's own requests are the
+// only ones on it. (mockStore() below still has sample data for screenshots.)
+const emptyStore = (): Store => ({ nextId: 1000, limits: { ...TIME_LIMIT_MIN }, requests: [] });
+
+export function mockStore(): Store {
   const now = Date.now();
   const ago = (min: number) => now - min * 60_000;
   // Earlier today, already closed: gives the timeline some history.
@@ -240,7 +244,7 @@ function seed(): Store {
 
 // Kept on globalThis so hot reloads in dev don't wipe it.
 const g = globalThis as unknown as { __requestStore?: Store };
-const store = (g.__requestStore ??= seed());
+const store = (g.__requestStore ??= emptyStore());
 
 export const getLimits = (): Limits => store.limits ?? { ...TIME_LIMIT_MIN };
 
@@ -434,7 +438,7 @@ export function clearRequests() {
 }
 
 export function resetStore() {
-  Object.assign(store, seed());
+  Object.assign(store, emptyStore());
 }
 
 // For the hosted demo (see lib/store-sync.ts): the same mock data, saved
@@ -446,4 +450,4 @@ export function replaceStore(next: Store) {
   store.limits = next.limits;
   store.lastWrite = next.lastWrite;
 }
-export const freshStore = (): Store => seed();
+export const freshStore = (): Store => emptyStore();
