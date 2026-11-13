@@ -225,7 +225,7 @@ function SignIn({ onSignedIn }: { onSignedIn: (g: Guest) => void }) {
           {sending ? L.signingIn : L.continue}
         </Button>
       </form>
-      <footer className="flex shrink-0 flex-col items-center gap-0.5 border-t py-2 text-xs text-muted-foreground">
+      <footer className="flex shrink-0 flex-col items-center gap-0.5 border-t py-2 text-xs text-muted-foreground [@container(max-height:700px)]:flex-row [@container(max-height:700px)]:justify-center [@container(max-height:700px)]:gap-2 [@container(max-height:700px)]:py-1.5">
         <span className="flex items-center gap-1.5">
           Powered by <MewsWordmark className="h-2 w-auto" />
         </span>
@@ -273,7 +273,7 @@ function SignedInApp({ guest }: { guest: Guest }) {
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
-      <header className="flex shrink-0 items-center gap-2 border-b px-5 py-3">
+      <header className="flex shrink-0 items-center gap-2 border-b px-5 py-3 [@container(max-height:700px)]:py-2">
         {id && (
           // Round back button, iOS style, before the hotel's logo
           <button
@@ -302,7 +302,7 @@ function SignedInApp({ guest }: { guest: Guest }) {
       {sheetReq && <RatingSheet key={`${sheetReq.id}-${sheet!.stars}`} r={sheetReq} initial={sheet!.stars} onClose={closeSheet} />}
       <DemoStepper room={room} id={id} />
       {/* The hotel's brand leads on guest pages; Mews signs off quietly. */}
-      <footer className="flex shrink-0 flex-col items-center gap-0.5 border-t py-2 text-xs text-muted-foreground">
+      <footer className="flex shrink-0 flex-col items-center gap-0.5 border-t py-2 text-xs text-muted-foreground [@container(max-height:700px)]:flex-row [@container(max-height:700px)]:justify-center [@container(max-height:700px)]:gap-2 [@container(max-height:700px)]:py-1.5">
         <span className="flex items-center gap-1.5">
           Powered by <MewsWordmark className="h-2 w-auto" />
         </span>
@@ -399,7 +399,7 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
   return (
     // One screen, no scrolling: the newest live request, the words box,
     // then one row of tiles per group, and Send.
-    <div className="flex flex-1 flex-col gap-3 px-5 py-4">
+    <div className="flex flex-1 flex-col gap-3 px-5 py-4 [@container(max-height:700px)]:gap-2 [@container(max-height:700px)]:py-2.5">
       {mine.length > 0 && (
         <section aria-label="Your requests" className="flex flex-col gap-2">
           {/* The newest one; the rest are a tap away on its tracker's Home. */}
@@ -417,7 +417,7 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
       )}
 
       <section className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-semibold tracking-tight">{mine.length ? L.anythingElse : L.howCanWeHelp}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight [@container(max-height:700px)]:text-xl">{mine.length ? L.anythingElse : L.howCanWeHelp}</h1>
         <VoiceTextarea
           id="req"
           value={text}
@@ -426,6 +426,8 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
           onVoice={(r) => setText(r.transcript)}
           placeholder={canRecord ? L.placeholderMic : L.placeholder}
           rows={2}
+          // Short screens: one line, so everything still fits without scrolling
+          className="[@container(max-height:700px)]:[&_textarea]:h-11 [@container(max-height:700px)]:[&_textarea]:py-2.5"
         />
         {english && text.trim() && (
           // What the team will read: the guest's words, in English
@@ -441,13 +443,18 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
         </p>
       </section>
 
-      <section aria-label="What you need" className="flex flex-col gap-3">
+      {/* Tiles grow with the screen: compact on a small phone, roomier on a
+          tall one, so there's no dead space above Send on any device. */}
+      <section aria-label="What you need" className="flex min-h-0 flex-1 flex-col gap-[clamp(8px,1.8cqh,18px)]">
         {GROUPS.map(({ name }) => {
           const items = OPTIONS.filter((o) => o.group === name);
           return (
-            <div key={name} className="flex flex-col gap-1.5">
+            <div key={name} className="flex max-h-[150px] min-h-0 flex-1 flex-col gap-1.5">
               <h2 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{L.groups[name]}</h2>
-              <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+              <div
+                className="grid min-h-[46px] flex-1 gap-1.5"
+                style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
+              >
                 {items.map((o) => {
                   const Icon = OPTION_ICON[o.id];
                   const on = isOn(o.id);
@@ -458,7 +465,7 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
                       aria-pressed={on}
                       aria-label={o.label}
                       className={cn(
-                        "relative flex h-[54px] flex-col items-center justify-center gap-1 rounded-lg border px-1 text-center text-[11px] leading-tight transition-colors",
+                        "relative flex h-full flex-col items-center justify-center gap-[clamp(3px,0.8cqh,8px)] rounded-xl border px-1 text-center text-[clamp(11px,1.5cqh,13px)] leading-tight transition-colors",
                         on ? "border-orchid bg-orchid-tint font-medium" : "border-input bg-card hover:bg-accent",
                       )}
                     >
@@ -467,8 +474,8 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
                           <CheckIcon className="size-2.5" />
                         </span>
                       )}
-                      <Icon className="size-5 shrink-0" />
-                      <span className="w-full truncate">{L.tiles[o.id]}</span>
+                      <Icon className="size-[clamp(18px,3.2cqh,30px)] shrink-0" />
+                      <span className="line-clamp-2 w-full text-balance">{L.tiles[o.id]}</span>
                     </button>
                   );
                 })}

@@ -3,7 +3,7 @@
 // breakpoint) the frame disappears and the app is full screen.
 export function PhoneFrame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh sm:flex sm:items-center sm:justify-center sm:bg-muted sm:py-6">
+    <div className="min-h-dvh sm:flex sm:items-center sm:justify-center sm:bg-muted sm:py-3">
       <div className="relative sm:rounded-[3.6rem] sm:bg-[#0b0b0c] sm:p-3 sm:shadow-2xl sm:ring-1 sm:ring-black/50">
         {/* Side buttons */}
         <span aria-hidden className="absolute top-28 -left-[3px] hidden h-8 w-[3px] rounded-l bg-[#1c1c1e] sm:block" />
@@ -11,7 +11,7 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
         <span aria-hidden className="absolute top-[15.5rem] -left-[3px] hidden h-14 w-[3px] rounded-l bg-[#1c1c1e] sm:block" />
         <span aria-hidden className="absolute top-48 -right-[3px] hidden h-20 w-[3px] rounded-r bg-[#1c1c1e] sm:block" />
 
-        <main className="relative mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-background sm:h-[min(852px,calc(100dvh-4.5rem))] sm:w-[393px] sm:rounded-[2.9rem]">
+        <main className="relative mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-background [container-type:size] sm:h-[min(852px,calc(100dvh-2.75rem))] sm:w-[393px] sm:rounded-[2.9rem]">
           <StatusBar />
           {children}
           {/* Home indicator */}

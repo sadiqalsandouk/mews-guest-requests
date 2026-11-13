@@ -48,7 +48,7 @@ const en: Dict = {
   notFound: "We couldn't find that booking. Check your surname and room number.", enterBoth: "Enter your surname and room number.",
   genericError: "Something went wrong. Try again.",
   room: (r) => `Room ${r}`, home: "Home", signOut: "Sign out", language: "Language",
-  howCanWeHelp: "How can we help?", anythingElse: "Anything else?", placeholderMic: "Tell us in any language, or tap the mic",
+  howCanWeHelp: "How can we help?", anythingElse: "Anything else?", placeholderMic: "Type or speak, in any language",
   placeholder: "Tell us in any language", reading: "Reading your message…", ticked: "We ticked what you asked for. Tap to change.",
   orTap: "Or tap what you need:", inEnglish: "In English:",
   groups: { "For your room": "For your room", "Something's not working": "Something's not working", "Front desk": "Front desk" },
