@@ -35,20 +35,45 @@ export async function readStore<T>(fn: () => T): Promise<T> {
   return fn();
 }
 
-/** Change the demo state and save it back (when hosted). */
-export async function writeStore<T>(fn: () => T): Promise<T> {
-  await load();
-  const result = fn();
-  await save();
-  return result;
+// Several guests can submit at the same moment (the live QR demo), and each
+// write saves the whole state. A short lock makes writes take turns, so two
+// requests sent together can't overwrite each other.
+const LOCK_KEY = "guest-requests:demo-state:lock";
+const LOCK_TTL_MS = 5000;
+
+async function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  if (!redis) return fn();
+  const id = Math.random().toString(36).slice(2);
+  for (let i = 0; i < 60; i++) {
+    if (await redis.set(LOCK_KEY, id, { nx: true, px: LOCK_TTL_MS })) {
+      try {
+        return await fn();
+      } finally {
+        if ((await redis.get(LOCK_KEY)) === id) await redis.del(LOCK_KEY);
+      }
+    }
+    await new Promise((r) => setTimeout(r, 50 + Math.random() * 50));
+  }
+  return fn(); // Lock never freed (shouldn't happen): don't block the guest.
 }
 
-// Public demo link: cap AI calls so nobody can run up the Gemini bill.
-const AI_CALLS_PER_HOUR = 60;
-export async function aiAllowed(): Promise<boolean> {
+/** Change the demo state and save it back (when hosted). */
+export async function writeStore<T>(fn: () => T): Promise<T> {
+  return withLock(async () => {
+    await load();
+    const result = fn();
+    await save();
+    return result;
+  });
+}
+
+// Public demo link: cap AI calls so nobody can run up the AI bill.
+// Suggestions run as guests type, so they get their own, larger allowance.
+const AI_CALLS_PER_HOUR = { ai: 60, suggest: 1500 };
+export async function aiAllowed(bucket: keyof typeof AI_CALLS_PER_HOUR = "ai"): Promise<boolean> {
   if (!redis) return true;
-  const key = `guest-requests:ai:${new Date().toISOString().slice(0, 13)}`;
+  const key = `guest-requests:${bucket}:${new Date().toISOString().slice(0, 13)}`;
   const n = await redis.incr(key);
   if (n === 1) await redis.expire(key, 3600);
-  return n <= AI_CALLS_PER_HOUR;
+  return n <= AI_CALLS_PER_HOUR[bucket];
 }

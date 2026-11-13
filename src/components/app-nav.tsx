@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { RequestsBoardIcon, MenuIcon, ResetDemoIcon, SettingsIcon, GuestViewIcon, CloseIcon } from "@/components/icons";
+import { RequestsBoardIcon, MenuIcon, ResetDemoIcon, SettingsIcon, GuestViewIcon, CloseIcon, DeleteIcon } from "@/components/icons";
 
 import { MewsWordmark } from "@/components/mews-logo";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { HOTEL_NAME } from "@/lib/hotel";
+import { removeAllRequests } from "@/lib/use-live";
 import { cn } from "@/lib/utils";
 
 let resetSeq = 0;
@@ -17,14 +18,13 @@ const PAGES = [
   { href: "/staff/settings", label: "Settings", icon: SettingsIcon },
 ];
 
-const DEMO = [
-  { href: "/guest?room=507", label: "Guest view", icon: GuestViewIcon },
-  { href: "/staff/qr", label: "Guest QR code", icon: GuestViewIcon },
-];
+// The guest app is a separate product, opened from the demo home page, not from here.
+const DEMO = [{ href: "/", label: "Demo home", icon: GuestViewIcon }];
 
 // Hamburger + slide-in side panel: where you go (pages), like the Mews PMS.
 export function AppNav() {
   const [open, setOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -36,6 +36,15 @@ export function AppNav() {
 
   const reset = async () => {
     await fetch("/api/reset", { method: "POST" });
+    setOpen(false);
+    router.push(`/staff?week=0&tab=open&t=reset${++resetSeq}`);
+  };
+
+  // Two clicks, so a stray tap mid-demo doesn't empty the board.
+  const clearAll = async () => {
+    if (!confirmClear) return setConfirmClear(true);
+    await removeAllRequests();
+    setConfirmClear(false);
     setOpen(false);
     router.push(`/staff?week=0&tab=open&t=reset${++resetSeq}`);
   };
@@ -89,6 +98,13 @@ export function AppNav() {
             ))}
             <button onClick={reset} className={item(false)}>
               <ResetDemoIcon className="size-4" /> Reset demo data
+            </button>
+            <button
+              onClick={clearAll}
+              onBlur={() => setConfirmClear(false)}
+              className={cn(item(false), confirmClear && "bg-dot-red font-medium text-white hover:bg-dot-red hover:text-white")}
+            >
+              <DeleteIcon className="size-4" /> {confirmClear ? "Click again to delete all" : "Delete all requests"}
             </button>
           </nav>
 

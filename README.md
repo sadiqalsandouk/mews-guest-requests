@@ -28,10 +28,10 @@ On the guest page (laptop only), a small panel steps through every stage of a re
 
 ```bash
 npm install
-GEMINI_API_KEY=your-key npm run dev   # voice and AI need a Gemini API key
+AI_GATEWAY_API_KEY=your-key npm run dev   # AI goes through Vercel AI Gateway
 ```
 
-Open http://localhost:3000. Without a Gemini key everything works except voice and AI auto-fill (requests fall back to keyword routing).
+Open http://localhost:3000. Without a Gateway key everything works except voice and AI auto-fill (requests fall back to keyword routing).
 
 ## Scan it on a phone (end to end, with the mic)
 
@@ -50,7 +50,9 @@ On the same Wi-Fi without voice: open `http://<laptop-ip>:3000/staff/qr` instead
 ## How it works
 
 - **Next.js 16** (app and a thin server in one), **Tailwind CSS v4** with tokens matched to Mews's look, **shadcn/ui** components, a custom icon set.
-- **Gemini** takes the voice note directly: one call transcribes it (any language) and fills in the room, request (in English), department, preset and urgency. Thinking is off for speed (about 3 s).
+- **Guest requests: a decision model** (Jev from TypeSafe AI, via the Vercel AI SDK's `experimental_decide`) answers typed questions: which department, is it urgent, is anyone in danger, is it in English. Each answer comes with a probability. Under 70% sure of the department, it goes to the front desk for a person to triage. Safety words are checked by fixed rules first. Non-English requests are translated for staff by a small language model. If the AI fails, keyword rules route it. About 0.3 s in English.
+- **Staff dictation:** Gemini (through the same Gateway) takes the voice note directly: one call transcribes it (any language) and fills in the room, request (in English), department, preset and urgency.
+- **Guest sign-in:** surname + room, checked against a guest list (`GUEST_LIST` env var, standing in for Mews reservations), kept in a signed, HttpOnly cookie. Every guest API call takes the room from that cookie and filters on the server, so a guest only ever receives their own room's requests. Guests can say a request is fixed; only staff close it.
 - **Safety words** (gas, fire, smoke, flood… in English and Arabic) are checked on the server before and after the AI, so emergencies are never left to the model alone.
 - **No real database, on purpose.** It runs on mock data. Locally that lives in server memory; on the live link (serverless hosting, many short-lived servers) the same mock data is kept in a small Upstash Redis cache so the guest's phone and the staff board stay in sync (`src/lib/store-sync.ts`). Screens poll every 1.5 s, refresh instantly after a change in the same tab, and alert staff when a new request arrives.
 
@@ -65,6 +67,7 @@ On the same Wi-Fi without voice: open `http://<laptop-ip>:3000/staff/qr` instead
 
 - `src/app/` pages and API routes (`api/requests`, `api/ai/parse`, `api/settings`, `api/reset`)
 - `src/lib/requests.ts` request model, mock data, escalation and repeat rules
-- `src/lib/ai.ts` the Gemini call and safety words
+- `src/lib/ai.ts` the decision model, translation, dictation and safety words
+- `src/lib/guest-session.ts` guest sign-in and the guest list
 - `src/components/` staff board, timeline, request detail, guest app, voice input
 - `docs/` prompts used to generate the icon set with Codex

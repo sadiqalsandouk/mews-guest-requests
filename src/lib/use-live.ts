@@ -11,10 +11,12 @@ export const refreshAllLive = () => window.dispatchEvent(new Event(LIVE_REFRESH)
 // across devices. Good enough for a demo; production would push via webhooks.
 export function useLive<T>(url: string | null, intervalMs = 1500) {
   const [data, setData] = useState<T | null>(null);
+  const [missing, setMissing] = useState(false); // 404: e.g. staff deleted it
 
   const refresh = useCallback(async () => {
     if (!url) return;
     const res = await fetch(url, { cache: "no-store" });
+    setMissing(res.status === 404);
     if (res.ok) setData(await res.json());
   }, [url]);
 
@@ -22,7 +24,10 @@ export function useLive<T>(url: string | null, intervalMs = 1500) {
     if (!url) return;
     let alive = true;
     const tick = () => fetch(url, { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => {
+        if (alive) setMissing(res.status === 404);
+        return res.ok ? res.json() : null;
+      })
       .then((json) => alive && json && setData(json))
       .catch(() => {});
     tick();
@@ -42,11 +47,11 @@ export function useLive<T>(url: string | null, intervalMs = 1500) {
     };
   }, [url, intervalMs]);
 
-  return { data, refresh };
+  return { data, refresh, missing };
 }
 
-export async function patchRequest(id: string, body: Record<string, unknown>) {
-  await fetch(`/api/requests/${id}`, {
+export async function patchRequest(id: string, body: Record<string, unknown>, base = "/api/requests") {
+  await fetch(`${base}/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -54,5 +59,15 @@ export async function patchRequest(id: string, body: Record<string, unknown>) {
   refreshAllLive();
 }
 
-export const sendAction = (id: string, action: "advance" | "confirm" | "reopen" | "followUp") =>
-  patchRequest(id, { action });
+export async function removeRequest(id: string) {
+  await fetch(`/api/requests/${id}`, { method: "DELETE" });
+  refreshAllLive();
+}
+
+export async function removeAllRequests() {
+  await fetch("/api/requests", { method: "DELETE" });
+  refreshAllLive();
+}
+
+export const sendAction = (id: string, action: "advance" | "confirm" | "guestConfirm" | "reopen" | "followUp", base?: string) =>
+  patchRequest(id, { action }, base);

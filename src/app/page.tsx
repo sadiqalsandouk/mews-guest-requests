@@ -1,6 +1,9 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { DemoLauncher } from "@/components/demo-launcher";
 
-// Two apps only: staff (/staff) and guest (/guest?room=…). Home opens staff.
+export const metadata: Metadata = { title: "Guest Requests · prototype demo" };
+
+// Demo home: the QR code guests scan to open the guest app.
 export default function Home() {
-  redirect("/staff");
+  return <DemoLauncher />;
 }

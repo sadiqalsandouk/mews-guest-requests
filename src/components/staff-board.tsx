@@ -180,6 +180,7 @@ export function StaffBoard({ fullScreen = false }: { fullScreen?: boolean }) {
           <MewsWordmark className="h-3.5 w-auto" />
         </Link>
         <span className="hidden text-sm text-muted-foreground lg:inline">Guest Requests</span>
+        <span className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">Staff</span>
         {/* Opens the global ⌘K search */}
         <button
           onClick={() => window.dispatchEvent(new Event(OPEN_SEARCH_EVENT))}

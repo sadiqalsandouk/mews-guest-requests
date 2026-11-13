@@ -12,7 +12,7 @@ export function statusOf(r: GuestRequest, now: number) {
     case "on_the_way":
       return { dot: "bg-dot-amber", label: STEPS[stepIndex(r.status)].staff };
     case "fixed":
-      return { dot: "bg-slate", label: "Awaiting guest" };
+      return { dot: "bg-slate", label: r.guestConfirmedAt ? "Guest says fixed" : "Awaiting guest" };
     case "confirmed":
       return { dot: "bg-dot-green", label: "Closed" };
   }

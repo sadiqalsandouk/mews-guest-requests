@@ -55,13 +55,27 @@ function activity(r: GuestRequest, now: number): Event[] {
       text: r.source === "staff" ? "logged this request for the guest" : "sent this request from the guest app",
     },
   ];
+  if (r.routedBy)
+    ev.push({
+      at: r.createdAt,
+      who: "System",
+      text:
+        r.routedBy.by === "guest"
+          ? `sent it to ${r.category} (the guest picked it)`
+          : r.routedBy.by === "ai"
+          ? r.routedBy.confidence !== undefined && r.routedBy.confidence < 0.7
+            ? `wasn't sure which team (${Math.round(r.routedBy.confidence * 100)}%), so sent it to the front desk`
+            : `routed it to ${r.category} (AI, ${Math.round((r.routedBy.confidence ?? 0) * 100)}% sure)`
+          : `routed it to ${r.category} (keyword rules: AI unavailable)`,
+    });
   if (r.stepAt?.assigned) ev.push({ at: r.stepAt.assigned, who: "System", text: `assigned it to ${r.assignee ?? staff}` });
   if (r.stepAt?.on_the_way) ev.push({ at: r.stepAt.on_the_way, who: staff, text: "is on the way" });
   if (r.reopened && r.dueFrom) ev.push({ at: r.dueFrom, who: "Guest", text: "said it isn't fixed. Reopened", tone: "bad" });
   if (r.dueBy && r.status !== "confirmed" && isOverdue(r, now))
     ev.push({ at: r.dueBy, who: "System", text: "escalated it to the duty manager (past the time limit)", tone: "bad" });
   if (r.stepAt?.fixed) ev.push({ at: r.stepAt.fixed, who: staff, text: "marked it as fixed" });
-  if (r.stepAt?.confirmed) ev.push({ at: r.stepAt.confirmed, who: "Guest", text: "confirmed it's fixed", tone: "good" });
+  if (r.guestConfirmedAt) ev.push({ at: r.guestConfirmedAt, who: "Guest", text: "said it's fixed", tone: "good" });
+  if (r.stepAt?.confirmed) ev.push({ at: r.stepAt.confirmed, who: "Duty manager", text: "closed the request", tone: "good" });
   if (r.rating && r.ratedAt)
     ev.push({ at: r.ratedAt, who: "Guest", text: `rated it ${r.rating}★`, tone: r.rating <= 3 ? "bad" : "good" });
   if (r.tip && r.tippedAt) ev.push({ at: r.tippedAt, who: "Guest", text: `tipped ${staff} £${r.tip}`, tone: "good" });
@@ -224,10 +238,24 @@ export function RequestDetail({
             <span className={cn("size-2 rounded-full", s.dot)} aria-hidden /> {s.label}
           </span>
           {r.status === "fixed" ? (
-            <p className="text-sm text-muted-foreground">Waiting for the guest to confirm.</p>
+            // The guest's "yes" is a signal; closing is the team's call.
+            <>
+              <p className="text-sm text-muted-foreground">
+                {r.guestConfirmedAt ? "The guest says it's fixed." : "Waiting for the guest to check."}
+              </p>
+              <Button
+                size="lg"
+                onClick={async () => {
+                  await sendAction(r.id, "confirm");
+                  done();
+                }}
+              >
+                Close request
+              </Button>
+            </>
           ) : r.status === "confirmed" ? (
             <p className="flex items-center gap-1 text-sm">
-              <CheckIcon className="size-4 text-dot-green" /> Closed by the guest
+              <CheckIcon className="size-4 text-dot-green" /> Closed
             </p>
           ) : (
             <Button

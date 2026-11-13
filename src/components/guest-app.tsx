@@ -1,10 +1,10 @@
 "use client";
 
-import { TowelsIcon, PillowsIcon, RoomCleaningIcon, SomethingBrokenIcon, ReceivedArt, AssignedArt, OnTheWayArt, FixedArt, ConfirmedArt } from "@/components/icons";
+import { TowelsIcon, PillowsIcon, RoomCleaningIcon, SomethingBrokenIcon, ToiletriesIcon, DrinksIcon, ShowerWaterIcon, HeatingAcIcon, TvWifiIcon, LateCheckoutIcon, TaxiIcon, LuggageIcon, ReceivedArt, AssignedArt, OnTheWayArt, FixedArt, ConfirmedArt } from "@/components/icons";
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { TranslatedIcon, BackIcon, DeptHousekeepingIcon, StatusReceivedIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, DeptFrontDeskIcon, RoomDoorIcon, PauseIcon, PlayIcon, RatingIcon, DeptMaintenanceIcon } from "@/components/icons";
+import { TranslatedIcon, BackIcon, SignOutIcon, DeptHousekeepingIcon, StatusReceivedIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, DeptFrontDeskIcon, RoomDoorIcon, PauseIcon, PlayIcon, RatingIcon, DeptMaintenanceIcon } from "@/components/icons";
 
 import { useIsTopWindow } from "@/components/demo-exit";
 import { MewsWordmark } from "@/components/mews-logo";
@@ -12,20 +12,29 @@ import { Button } from "@/components/ui/button";
 import { VoiceTextarea } from "@/components/voice-input";
 import { useCanRecord } from "@/lib/use-recorder";
 import { HOTEL_NAME } from "@/lib/hotel";
-import { BAD_TAGS, GOOD_TAGS, TIP_AMOUNTS, staffName, stepIndex, type Category, type GuestRequest, type Status } from "@/lib/requests";
+import { OPTIONS, type OptionId } from "@/lib/options";
+import { BAD_TAGS, GOOD_TAGS, canRate, TIP_AMOUNTS, staffName, stepIndex, type Category, type GuestRequest, type Status } from "@/lib/requests";
 import { patchRequest, sendAction, useLive } from "@/lib/use-live";
 import { useNow } from "@/lib/use-now";
 import { cn } from "@/lib/utils";
 
-const QUICK = [
-  ["Extra towels", TowelsIcon], ["Extra pillows", PillowsIcon],
-  ["Room cleaning", RoomCleaningIcon], ["Something is broken", SomethingBrokenIcon],
-] as const;
+// One icon per option (the options themselves live in lib/options.ts).
+const OPTION_ICON: Record<OptionId, typeof TowelsIcon> = {
+  towels: TowelsIcon, pillows: PillowsIcon, toiletries: ToiletriesIcon, drinks: DrinksIcon, cleaning: RoomCleaningIcon,
+  hotWater: ShowerWaterIcon, temperature: HeatingAcIcon, tvWifi: TvWifiIcon, broken: SomethingBrokenIcon,
+  lateCheckout: LateCheckoutIcon, taxi: TaxiIcon, luggage: LuggageIcon,
+};
+// The tile groups, in the order shown.
+const GROUPS = [{ name: "For your room" }, { name: "Something's not working" }, { name: "Front desk" }] as const;
 const DEPT_ICON: Record<Category, typeof DeptMaintenanceIcon> = {
   Maintenance: DeptMaintenanceIcon,
   Housekeeping: DeptHousekeepingIcon,
   "Front desk": DeptFrontDeskIcon,
 };
+// Guest-only API: the server only ever returns this guest's room.
+const API = "/api/guest/requests";
+type Guest = { room: string; surname: string };
+
 // The 4 segments of the progress bar (confirmed = all done).
 const SEGMENTS: Status[] = ["received", "assigned", "on_the_way", "fixed"];
 
@@ -47,38 +56,139 @@ function stageCopy(r: GuestRequest) {
     case "on_the_way":
       return { title: `${name} is on the way`, sub: `Heading to room ${r.room} now.` };
     case "fixed":
-      return { title: "Marked as fixed", sub: "Can you check it's all good?" };
+      return r.guestConfirmedAt
+        ? { title: "Thanks for checking", sub: "Glad it's sorted. The team will close it off." }
+        : { title: "Marked as fixed", sub: "Can you check it's all good?" };
     case "confirmed":
       return { title: "All sorted", sub: "Thanks for letting us know. Enjoy your stay." };
   }
 }
 
 export function GuestApp() {
+  // undefined = still checking, null = not signed in.
+  const [guest, setGuest] = useState<Guest | null | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/guest/session", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((g) => alive && setGuest(g))
+      .catch(() => alive && setGuest(null));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (guest === undefined) return <p className="px-5 py-5 text-muted-foreground">Loading…</p>;
+  if (!guest) return <SignIn onSignedIn={setGuest} />;
+  return (
+    <SignedInApp
+      key={guest.room}
+      guest={guest}
+      onSignOut={async () => {
+        await fetch("/api/guest/session", { method: "DELETE" });
+        setGuest(null);
+      }}
+    />
+  );
+}
+
+/* ---------------- Sign-in: surname + room, like hotel Wi-Fi ---------------- */
+
+function SignIn({ onSignedIn }: { onSignedIn: (g: Guest) => void }) {
+  const [surname, setSurname] = useState("");
+  const [room, setRoom] = useState("");
+  const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSending(true);
+    setError("");
+    const res = await fetch("/api/guest/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ surname, room }),
+    });
+    setSending(false);
+    if (res.ok) onSignedIn(await res.json());
+    else setError((await res.json().catch(() => ({}))).error ?? "Something went wrong. Try again.");
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
+      <header className="shrink-0 border-b px-5 py-4">
+        <p className="text-sm font-semibold">{HOTEL_NAME}</p>
+        <p className="text-xs text-muted-foreground">Guest requests</p>
+      </header>
+      <form onSubmit={submit} className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-6">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Welcome</h1>
+          <p className="mt-1 text-muted-foreground">Enter the surname on your booking and your room number.</p>
+        </div>
+        <label className="flex flex-col gap-1.5 text-sm font-medium">
+          Surname
+          <input
+            value={surname}
+            onChange={(e) => setSurname(e.target.value)}
+            autoComplete="family-name"
+            autoCapitalize="words"
+            required
+            className="h-12 rounded-md border bg-card px-3 text-base font-normal"
+          />
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm font-medium">
+          Room number
+          <input
+            value={room}
+            onChange={(e) => setRoom(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            inputMode="numeric"
+            pattern="[0-9]*"
+            required
+            className="h-12 rounded-md border bg-card px-3 text-base font-normal"
+          />
+        </label>
+        {error && <p className="text-sm text-dot-red">{error}</p>}
+        <Button type="submit" size="lg" className="h-12" disabled={sending || !surname.trim() || !room}>
+          {sending ? "Signing in…" : "Continue"}
+        </Button>
+      </form>
+      <footer className="flex shrink-0 flex-col items-center gap-0.5 border-t py-2 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          Powered by <MewsWordmark className="h-2 w-auto" />
+        </span>
+        <span className="text-[10px] opacity-80">Concept prototype · not an official Mews product</span>
+      </footer>
+    </div>
+  );
+}
+
+function SignedInApp({ guest, onSignOut }: { guest: Guest; onSignOut: () => void }) {
   const params = useSearchParams();
   const router = useRouter();
-  const room = params.get("room") ?? "214";
+  const room = guest.room;
   const id = params.get("id");
 
-  const go = (nextId: string | null) => router.replace(nextId ? `?room=${room}&id=${nextId}` : `?room=${room}`);
+  const go = (nextId: string | null) => router.replace(nextId ? `?id=${nextId}` : "?");
 
-  // Review prompt: opens by itself once a request in this room is confirmed
-  // (within the last hour) and not yet rated, unless the guest said "Not now".
-  const { data: all } = useLive<GuestRequest[]>("/api/requests", 2000);
+  // Review prompt: opens by itself once the guest says it's fixed (or staff
+  // close it) within the last hour, if not yet rated and not "Not now".
+  const { data: all } = useLive<GuestRequest[]>(API, 2000);
   const now = useNow(15_000);
   const [sheet, setSheet] = useState<{ id: string; stars: number } | null>(null);
   const [skipped, setSkipped] = useState<string[]>([]);
-  const promptKey = (r: GuestRequest) => `${r.id}:${r.closedAt ?? ""}`;
+  const doneAt = (r: GuestRequest) => r.guestConfirmedAt ?? r.closedAt ?? 0;
+  const promptKey = (r: GuestRequest) => `${r.id}:${doneAt(r)}`;
   const due = (all ?? [])
     .filter(
       (r) =>
         r.room === room &&
-        r.status === "confirmed" &&
+        canRate(r) &&
         !r.rating &&
         now !== null &&
-        now - (r.closedAt ?? 0) < 3_600_000 &&
+        now - doneAt(r) < 3_600_000 &&
         !skipped.includes(promptKey(r)),
     )
-    .sort((a, b) => (b.closedAt ?? 0) - (a.closedAt ?? 0))[0];
+    .sort((a, b) => doneAt(b) - doneAt(a))[0];
   if (!sheet && due) setSheet({ id: due.id, stars: 0 });
   const sheetReq = sheet && (all ?? []).find((r) => r.id === sheet.id);
   const rate: RateFn = (rid, stars) => setSheet({ id: rid, stars });
@@ -93,17 +203,21 @@ export function GuestApp() {
         <div>
           <p className="text-sm font-semibold">{HOTEL_NAME}</p>
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <RoomDoorIcon className="size-3.5" aria-hidden /> Room {room}
+            <RoomDoorIcon className="size-3.5" aria-hidden /> Room {room} · {guest.surname}
           </p>
         </div>
-        {id && (
+        {id ? (
           <Button variant="ghost" size="sm" onClick={() => go(null)}>
             <BackIcon /> Home
+          </Button>
+        ) : (
+          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={onSignOut}>
+            <SignOutIcon /> Sign out
           </Button>
         )}
       </header>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {id ? <Tracker id={id} onRate={rate} /> : <Home room={room} onOpen={go} onRate={rate} />}
+        {id ? <Tracker id={id} onRate={rate} /> : <Home room={room} onOpen={go} />}
       </div>
       {sheetReq && <RatingSheet key={`${sheetReq.id}-${sheet!.stars}`} r={sheetReq} initial={sheet!.stars} onClose={closeSheet} />}
       <DemoStepper room={room} id={id} />
@@ -120,113 +234,185 @@ export function GuestApp() {
 
 /* ---------------- Home: live status cards + new request ---------------- */
 
-function Home({ room, onOpen, onRate }: { room: string; onOpen: (id: string) => void; onRate: RateFn }) {
+function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => void }) {
   const canRecord = useCanRecord();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const { data: all } = useLive<GuestRequest[]>("/api/requests", 2000);
+  // What the decision model ticked from the guest's words, and what the guest
+  // tapped themselves. A tap always wins over the model.
+  const [suggested, setSuggested] = useState<OptionId[]>([]);
+  const [tapped, setTapped] = useState<Partial<Record<OptionId, boolean>>>({});
+  const [thinking, setThinking] = useState(false);
+  const { data: all } = useLive<GuestRequest[]>(API, 2000);
   const now = useNow(15_000);
   // Open requests, plus ones closed in the last hour (so "All sorted" lingers briefly).
   const mine = (all ?? []).filter(
     (r) => r.room === room && (r.status !== "confirmed" || (now !== null && now - (r.closedAt ?? 0) < 3_600_000)),
   );
 
+  // Ask the decision model which options the words match, once typing pauses.
+  useEffect(() => {
+    const words = text.trim();
+    let stale = false;
+    const t = setTimeout(async () => {
+      if (words.length < 3) {
+        setSuggested([]);
+        return;
+      }
+      setThinking(true);
+      try {
+        const res = await fetch("/api/guest/suggest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: words }),
+        });
+        const { options } = await res.json();
+        if (!stale) setSuggested(Array.isArray(options) ? options : []);
+      } catch {
+        // Suggestions are a nicety: never get in the guest's way.
+      } finally {
+        if (!stale) setThinking(false);
+      }
+    }, 450);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
+  }, [text]);
+
+  const isOn = (id: OptionId) => tapped[id] ?? suggested.includes(id);
+  const selected = OPTIONS.filter((o) => isOn(o.id));
+  const fromWords = !!text.trim() && selected.some((o) => tapped[o.id] === undefined);
+  const toggle = (id: OptionId) => setTapped((t) => ({ ...t, [id]: !isOn(id) }));
+
   const submit = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() && !selected.length) return;
     setSending(true);
-    const res = await fetch("/api/requests", {
+    const res = await fetch(API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ room, text }),
+      // The server takes the room from the sign-in.
+      body: JSON.stringify({
+        text,
+        options: selected.map((o) => o.id),
+        // Ticked from the words (not tapped): the words belong with these.
+        fromWords: selected.filter((o) => tapped[o.id] === undefined).map((o) => o.id),
+      }),
     });
     setSending(false);
-    if (res.ok) onOpen((await res.json()).id);
+    if (!res.ok) return;
+    const { ids } = await res.json();
+    setText("");
+    setSuggested([]);
+    setTapped({});
+    // One request: show its tracker. Several (one per team): show them all here.
+    onOpen(ids.length === 1 ? ids[0] : null);
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-6 px-5 py-5">
+    // One screen, no scrolling: the newest live request, the words box,
+    // then one row of tiles per group, and Send.
+    <div className="flex flex-1 flex-col gap-3 px-5 py-4">
       {mine.length > 0 && (
-        <section aria-label="Your requests" className="flex flex-col gap-3">
-          <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Live updates</h2>
-          {mine.map((r) => (
-            <StatusCard key={r.id} r={r} onOpen={() => onOpen(r.id)} onRate={onRate} />
-          ))}
+        <section aria-label="Your requests" className="flex flex-col gap-2">
+          {/* The newest one; the rest are a tap away on its tracker's Home. */}
+          <StatusCard r={mine[0]} onOpen={() => onOpen(mine[0].id)} />
+          {mine.length > 1 && (
+            <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+              {mine.slice(1).map((r) => (
+                <button key={r.id} onClick={() => onOpen(r.id)} className="max-w-full truncate underline-offset-2 hover:underline">
+                  {stageCopy(r).title}: {guestText(r)}
+                </button>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
-      <section className="flex flex-col gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {mine.length ? "Anything else?" : "How can we help?"}
-        </h1>
-        <label htmlFor="req" className="text-sm text-muted-foreground">
-          {canRecord ? "Type or tap the mic. Any language is fine." : "Type your request. Any language is fine."}
-        </label>
+      <section className="flex flex-col gap-1.5">
+        <h1 className="text-2xl font-semibold tracking-tight">{mine.length ? "Anything else?" : "How can we help?"}</h1>
         <VoiceTextarea
           id="req"
           value={text}
           onChange={setText}
           // Guests see their own words; the server translates for staff on send.
           onVoice={(r) => setText(r.transcript)}
-          placeholder="e.g. The shower is cold"
+          placeholder={canRecord ? "Tell us in any language, or tap the mic" : "Tell us in any language"}
+          rows={2}
         />
-        <div className="flex flex-wrap gap-2">
-          {QUICK.map(([q, Icon]) => (
-            <button
-              key={q}
-              onClick={() => setText(q)}
-              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm hover:bg-accent"
-            >
-              <Icon className="mr-1.5 inline-block size-5 align-text-bottom" />{q}
-            </button>
-          ))}
-        </div>
-        <Button size="lg" className="h-11 text-base" disabled={!text.trim() || sending} onClick={submit}>
-          {sending ? "Sending…" : "Send request"}
-        </Button>
+        <p className="h-4 text-xs text-muted-foreground" aria-live="polite">
+          {thinking ? "Reading your message…" : fromWords ? "We ticked what you asked for. Tap to change." : "Or tap what you need:"}
+        </p>
       </section>
+
+      <section aria-label="What you need" className="flex flex-col gap-3">
+        {GROUPS.map(({ name }) => {
+          const items = OPTIONS.filter((o) => o.group === name);
+          return (
+            <div key={name} className="flex flex-col gap-1.5">
+              <h2 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{name}</h2>
+              <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+                {items.map((o) => {
+                  const Icon = OPTION_ICON[o.id];
+                  const on = isOn(o.id);
+                  return (
+                    <button
+                      key={o.id}
+                      onClick={() => toggle(o.id)}
+                      aria-pressed={on}
+                      aria-label={o.label}
+                      className={cn(
+                        "relative flex h-[54px] flex-col items-center justify-center gap-1 rounded-lg border px-1 text-center text-[11px] leading-tight transition-colors",
+                        on ? "border-orchid bg-orchid-tint font-medium" : "border-input bg-card hover:bg-accent",
+                      )}
+                    >
+                      {on && (
+                        <span className="gr-pop absolute top-1 right-1 flex size-3.5 items-center justify-center rounded-full bg-orchid text-white">
+                          <CheckIcon className="size-2.5" />
+                        </span>
+                      )}
+                      <Icon className="size-5 shrink-0" />
+                      <span className="w-full truncate">{o.short}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </section>
+
+      <Button size="lg" className="mt-auto h-11 w-full shrink-0 text-base" disabled={(!text.trim() && !selected.length) || sending} onClick={submit}>
+        {sending ? "Sending…" : selected.length > 1 ? `Send request · ${selected.length} items` : "Send request"}
+      </Button>
     </div>
   );
 }
 
-// Compact live card, like the pinned order tracker in Uber Eats.
-function StatusCard({ r, onOpen, onRate }: { r: GuestRequest; onOpen: () => void; onRate: RateFn }) {
+// Slim live card, like the pinned order tracker in Uber Eats. Rating is
+// prompted separately (the sheet pops up), so the card stays one line.
+function StatusCard({ r, onOpen }: { r: GuestRequest; onOpen: () => void }) {
   const copy = stageCopy(r);
   const Icon = DEPT_ICON[r.category];
   const done = r.status === "confirmed";
   return (
-    <div className="gr-rise relative overflow-hidden rounded-lg border bg-card shadow-xs transition-shadow hover:shadow-md">
-    <button onClick={onOpen} className="flex w-full flex-col gap-3 p-4 text-left">
+    <button
+      onClick={onOpen}
+      className="gr-rise relative flex w-full flex-col gap-2 overflow-hidden rounded-lg border bg-card p-3 pl-4 text-left shadow-xs transition-shadow hover:shadow-md"
+    >
       <span className={cn("absolute inset-y-0 left-0 w-1", done ? "bg-dot-green" : "bg-orchid")} aria-hidden />
-      <div className="flex items-start gap-3">
-        <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-full", done ? "bg-status-done" : "bg-orchid-tint")}>
-          {done ? <CheckIcon className="gr-pop size-5 text-dot-green" /> : <Icon className={cn("size-5", r.status === "on_the_way" && "gr-float")} />}
+      <span className="flex items-center gap-3">
+        <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-full", done ? "bg-status-done" : "bg-orchid-tint")}>
+          {done ? <CheckIcon className="gr-pop size-4 text-dot-green" /> : <Icon className={cn("size-4", r.status === "on_the_way" && "gr-float")} />}
         </span>
-        <div className="min-w-0 flex-1">
-          <p key={r.status} className="gr-rise font-semibold">{copy.title}</p>
-          <p dir="auto" className="truncate text-sm text-muted-foreground">{guestText(r)}</p>
-          {r.original && (
-            <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
-              <TranslatedIcon className="size-3 shrink-0" /> <span className="truncate">{r.text}</span>
-            </p>
-          )}
-        </div>
-        <ChevronRightIcon className="mt-2 size-4 shrink-0 text-muted-foreground" />
-      </div>
+        <span className="min-w-0 flex-1">
+          <span key={r.status} className="gr-rise block truncate text-sm font-semibold">{copy.title}</span>
+          <span dir="auto" className="block truncate text-xs text-muted-foreground">{guestText(r)}</span>
+        </span>
+        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+      </span>
       <ProgressBar r={r} />
     </button>
-    {done && !r.rating && (
-      // Rate right from the card: one tap opens the sheet with that score.
-      <div className="flex items-center justify-between gap-3 border-t bg-orchid-tint px-4 py-3">
-        <span className="text-sm font-medium">How was {staffName(r)}&apos;s help?</span>
-        <RateStars r={r} onRate={onRate} size="size-6" />
-      </div>
-    )}
-    {done && r.rating && (
-      <div className="flex items-center gap-2 border-t px-4 py-2.5 text-sm text-muted-foreground">
-        <Stars value={r.rating} /> Thanks for rating
-      </div>
-    )}
-    </div>
   );
 }
 
@@ -260,15 +446,23 @@ function ProgressBar({ r, large = false }: { r: GuestRequest; large?: boolean })
 /* ---------------- Full tracker ---------------- */
 
 function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
-  const { data: r, refresh } = useLive<GuestRequest>(`/api/requests/${id}`, 1500);
+  const { data: r, refresh, missing } = useLive<GuestRequest>(`${API}/${id}`, 1500);
   const now = useNow(15_000);
 
+  // Staff deleted it (a duplicate or a mistake): say so rather than show old data.
+  if (missing)
+    return (
+      <div className="px-5 py-5">
+        <h1 className="text-2xl font-semibold tracking-tight">This request was removed</h1>
+        <p className="mt-1 text-muted-foreground">The team closed it off. You can send a new one any time.</p>
+      </div>
+    );
   if (!r) return <p className="px-5 py-5 text-muted-foreground">Loading…</p>;
 
   const copy = stageCopy(r);
   const done = r.status === "confirmed";
-  const answer = async (action: "confirm" | "reopen") => {
-    await sendAction(r.id, action);
+  const answer = async (action: "guestConfirm" | "reopen") => {
+    await sendAction(r.id, action, API);
     refresh();
   };
   const late = now !== null && r.dueBy !== undefined && now > r.dueBy && stepIndex(r.status) < stepIndex("fixed");
@@ -307,11 +501,12 @@ function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
         </p>
       )}
 
-      {r.status === "fixed" && (
+      {r.status === "fixed" && !r.guestConfirmedAt && (
+        // The guest's answer goes to the team; staff close the request.
         <div className="gr-pop rounded-lg border bg-orchid-tint p-4">
           <p className="mb-3 font-semibold">Is it fixed?</p>
           <div className="flex gap-2">
-            <Button size="lg" className="flex-1" onClick={() => answer("confirm")}>
+            <Button size="lg" className="flex-1" onClick={() => answer("guestConfirm")}>
               Yes, all good
             </Button>
             <Button variant="outline" size="lg" className="flex-1 bg-background" onClick={() => answer("reopen")}>
@@ -321,7 +516,7 @@ function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
         </div>
       )}
 
-      {done && <RateInline r={r} onRate={onRate} />}
+      {canRate(r) && <RateInline r={r} onRate={onRate} />}
 
       {/* Request + who has it */}
       <div className="flex items-center gap-3 rounded-lg border p-3">
@@ -361,7 +556,7 @@ function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
             assigned: `Passed to ${staffName(r)}`,
             on_the_way: "On the way",
             fixed: "Marked as fixed",
-            confirmed: "You confirmed it's fixed",
+            confirmed: "Closed by the team",
           }[s];
           return (
             <li key={s} className={cn("flex items-center gap-3", !reached && "text-muted-foreground")}>
@@ -461,7 +656,7 @@ function RatingSheet({
 
   const submit = async () => {
     setPhase("sending");
-    await patchRequest(r.id, { action: "rate", rating: stars, comment, tags });
+    await patchRequest(r.id, { action: "rate", rating: stars, comment, tags }, API);
     setPhase("thanks");
   };
 
@@ -597,7 +792,7 @@ function TipCard({ r }: { r: GuestRequest }) {
     if (!amount) return;
     setPhase("paying");
     await new Promise((ok) => setTimeout(ok, 1200)); // stand-in for the Apple Pay sheet
-    await patchRequest(r.id, { action: "tip", amount });
+    await patchRequest(r.id, { action: "tip", amount }, API);
     setPhase("sent");
   };
 
@@ -666,14 +861,14 @@ const STAGE_LABEL: Record<Status, string> = {
   assigned: "Assigned",
   on_the_way: "On the way",
   fixed: "Fixed",
-  confirmed: "Confirmed",
+  confirmed: "Closed",
 };
 
 // Demo-only control for presenting (hidden if the page is embedded in a frame).
 // Changes the real request, so the staff board follows along.
 function DemoStepper({ room, id }: { room: string; id: string | null }) {
   const show = useIsTopWindow();
-  const { data: all } = useLive<GuestRequest[]>(show ? "/api/requests" : null, 1500);
+  const { data: all } = useLive<GuestRequest[]>(show ? API : null, 1500);
   // The open request, or this room's most recent one.
   const mine = (all ?? []).filter((x) => x.room === room).sort((a, b) => b.createdAt - a.createdAt);
   const r = (id ? mine.find((x) => x.id === id) : undefined) ?? mine.find((x) => x.status !== "confirmed") ?? mine[0];
@@ -689,7 +884,7 @@ function StepperPanel({ r }: { r: GuestRequest }) {
 
   const setStage = async (status: Status) => {
     setOptimistic(status);
-    await patchRequest(r.id, { action: "set", status });
+    await patchRequest(r.id, { action: "set", status }, API);
   };
   const step = (by: number) => {
     const next = ALL_STAGES[Math.min(ALL_STAGES.length - 1, Math.max(0, i + by))];

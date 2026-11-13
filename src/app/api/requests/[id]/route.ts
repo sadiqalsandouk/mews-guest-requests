@@ -1,8 +1,8 @@
 import { connection, NextResponse, type NextRequest } from "next/server";
-import { addNote, applyAction, assignTo, TEAMS, getRequest, rateRequest, setStage, tipRequest, STEPS, withOverdue, type Action, type Status } from "@/lib/requests";
+import { addNote, applyAction, deleteRequest, assignTo, TEAMS, getRequest, rateRequest, setStage, tipRequest, STEPS, withOverdue, type Action, type Status } from "@/lib/requests";
 import { readStore, writeStore } from "@/lib/store-sync";
 
-const ACTIONS: Action[] = ["advance", "confirm", "reopen", "followUp"];
+const ACTIONS: Action[] = ["advance", "confirm", "guestConfirm", "reopen", "followUp"];
 const notFound = () => NextResponse.json({ error: "not found" }, { status: 404 });
 
 export async function GET(_req: NextRequest, ctx: RouteContext<"/api/requests/[id]">) {
@@ -60,4 +60,10 @@ export async function PATCH(req: NextRequest, ctx: RouteContext<"/api/requests/[
     return changed ? withOverdue(changed) : null;
   });
   return r ? NextResponse.json(r) : notFound();
+}
+
+export async function DELETE(_req: NextRequest, ctx: RouteContext<"/api/requests/[id]">) {
+  const id = (await ctx.params).id;
+  const deleted = await writeStore(() => deleteRequest(id));
+  return deleted ? NextResponse.json({ ok: true }) : notFound();
 }

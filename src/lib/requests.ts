@@ -17,10 +17,15 @@ export type GuestRequest = {
   // When the escalation clock started; restarts if the guest reopens it.
   dueFrom?: number;
   fixedAt?: number;
+  // The guest said "yes, it's fixed". Feedback only: staff still close it.
+  guestConfirmedAt?: number;
   closedAt?: number;
   reopened?: boolean;
   // "staff" = logged at the desk on the guest's behalf (phone call, in person).
   source?: "guest" | "staff";
+  // How the department was chosen: the guest tapped an option, the decision
+  // model (with how sure it was), or keyword rules when the AI was unavailable.
+  routedBy?: { by: "guest" | "ai" | "rules"; confidence?: number };
   // Safety risk or the guest can't use the room: top of every list.
   urgent?: boolean;
   safety?: boolean;
@@ -74,7 +79,7 @@ export const STEPS: { key: Status; staff: string; guest: string }[] = [
   { key: "assigned", staff: "Assigned", guest: "Passed to the team" },
   { key: "on_the_way", staff: "On the way", guest: "Someone is on the way" },
   { key: "fixed", staff: "Marked fixed", guest: "Marked as fixed" },
-  { key: "confirmed", staff: "Guest confirmed", guest: "You confirmed it's fixed" },
+  { key: "confirmed", staff: "Closed", guest: "Closed by the team" },
 ];
 
 export const stepIndex = (s: Status) => STEPS.findIndex((x) => x.key === s);
@@ -264,6 +269,7 @@ export function createRequest(
     urgent?: boolean;
     safety?: boolean;
     original?: { text: string; lang: string };
+    routedBy?: GuestRequest["routedBy"];
   } = {},
 ): GuestRequest {
   const r: GuestRequest = {
@@ -278,12 +284,16 @@ export function createRequest(
     urgent: opts.urgent || undefined,
     safety: opts.safety || undefined,
     original: opts.original,
+    routedBy: opts.routedBy,
   };
   store.requests.push(r);
   return r;
 }
 
-export type Action = "advance" | "confirm" | "reopen" | "followUp";
+export type Action = "advance" | "confirm" | "guestConfirm" | "reopen" | "followUp";
+
+// The guest can rate once they've said it's fixed, or once staff close it.
+export const canRate = (r: GuestRequest) => r.status === "confirmed" || !!r.guestConfirmedAt;
 
 // Ticket key shown to staff, like a Jira issue key.
 export const requestKey = (r: Pick<GuestRequest, "id">) => `REQ-${r.id}`;
@@ -324,7 +334,7 @@ export const BAD_TAGS = ["Too slow", "Not fully fixed", "No updates", "Had to ch
 
 export function rateRequest(id: string, rating: number, comment?: string, tags: string[] = []): GuestRequest | undefined {
   const r = getRequest(id);
-  if (!r || r.status !== "confirmed") return r;
+  if (!r || !canRate(r)) return r;
   const allowed = rating > LOW_RATING ? GOOD_TAGS : BAD_TAGS;
   r.rating = rating;
   r.ratingTags = tags.filter((t) => allowed.includes(t));
@@ -339,7 +349,7 @@ export const TIP_AMOUNTS = [2, 5, 10];
 // Mock tip (no money moves). Only once the request is done, and only once.
 export function tipRequest(id: string, amount: number): GuestRequest | undefined {
   const r = getRequest(id);
-  if (!r || r.status !== "confirmed" || r.tip) return r;
+  if (!r || !canRate(r) || r.tip) return r;
   r.tip = amount;
   r.tippedAt = Date.now();
   return r;
@@ -372,6 +382,7 @@ export function setStage(id: string, status: Status): GuestRequest | undefined {
   if (upto < 1) r.history = undefined;
   r.fixedAt = upto >= stepIndex("fixed") ? stepAt.fixed : undefined;
   r.closedAt = status === "confirmed" ? stepAt.confirmed : undefined;
+  if (upto < stepIndex("fixed")) r.guestConfirmedAt = undefined;
   return r;
 }
 
@@ -386,7 +397,11 @@ export function applyAction(id: string, action: Action): GuestRequest | undefine
       r.stepAt = { ...r.stepAt, [next]: Date.now() };
       if (next === "fixed") r.fixedAt = Date.now();
     }
+  } else if (action === "guestConfirm" && r.status === "fixed") {
+    // The guest's answer, not a close: the request stays with staff.
+    r.guestConfirmedAt ??= Date.now();
   } else if (action === "confirm" && r.status === "fixed") {
+    // Staff close it (the department lead or duty manager), not the guest.
     r.status = "confirmed";
     r.reopened = false;
     r.stepAt = { ...r.stepAt, confirmed: Date.now() };
@@ -399,10 +414,23 @@ export function applyAction(id: string, action: Action): GuestRequest | undefine
     r.status = "assigned";
     r.reopened = true;
     r.fixedAt = undefined;
+    r.guestConfirmedAt = undefined;
     r.stepAt = { received: r.stepAt?.received ?? r.createdAt, assigned: Date.now() };
     r.dueFrom = Date.now();
   }
   return r;
+}
+
+// Staff can remove a request (a duplicate, a test, logged by mistake).
+export function deleteRequest(id: string): boolean {
+  const before = store.requests.length;
+  store.requests = store.requests.filter((r) => r.id !== id);
+  return store.requests.length < before;
+}
+
+// Demo tool: an empty board, so a live run starts from nothing.
+export function clearRequests() {
+  store.requests = [];
 }
 
 export function resetStore() {

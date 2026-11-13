@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CloseIcon } from "@/components/icons";
+import { CloseIcon, DeleteIcon } from "@/components/icons";
 
 import { RequestDetail } from "@/components/request-detail";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { requestKey, type GuestRequest } from "@/lib/requests";
+import { removeRequest } from "@/lib/use-live";
 
 // Jira-style issue modal: opens over the board; the key and "Open full page"
 // lead to /staff/requests/[id] (Cmd-click opens it in a new tab).
@@ -24,6 +25,7 @@ export function RequestModal({
   onChange: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const href = `/staff/requests/${r.id}`;
 
   return (
@@ -58,6 +60,22 @@ export function RequestModal({
             >
               Open full page
             </Link>
+            {/* Two clicks to delete, so a stray click can't lose a request */}
+            <button
+              onClick={async () => {
+                if (!confirmDelete) return setConfirmDelete(true);
+                await removeRequest(r.id);
+                onClose();
+              }}
+              onBlur={() => setConfirmDelete(false)}
+              className={
+                confirmDelete
+                  ? "flex items-center gap-1 rounded-md bg-dot-red px-2 py-1 text-xs font-medium text-white"
+                  : "flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+              }
+            >
+              <DeleteIcon className="size-3.5" /> {confirmDelete ? "Click again to delete" : "Delete"}
+            </button>
             <button
               onClick={onClose}
               aria-label="Close"
