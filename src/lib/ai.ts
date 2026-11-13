@@ -169,18 +169,32 @@ export async function routeGuestRequest(text: string): Promise<GuestRouting> {
 // ("towels and a taxi"). Below this probability we leave it unticked.
 const SUGGEST_THRESHOLD = 0.5;
 
-/** What the guest has written so far → the options it asks for. */
-export async function suggestOptions(text: string): Promise<OptionId[]> {
+/** What the guest has written so far → the options it asks for, plus an
+ *  English version when they didn't write in English (shown under the box). */
+export async function suggestOptions(text: string): Promise<{ options: OptionId[]; english: string | null }> {
   const { answers } = await experimental_decide({
     model: DECISION_MODEL,
     state: { guestMessage: text },
-    questions: Object.fromEntries(
-      OPTIONS.map((o) => [
-        o.id,
-        { type: "boolean" as const, instructions: `${o.ask} Only answer yes if the message actually asks for or reports this.` },
-      ]),
-    ),
+    questions: {
+      ...Object.fromEntries(
+        OPTIONS.map((o) => [
+          o.id,
+          { type: "boolean" as const, instructions: `${o.ask} Only answer yes if the message actually asks for or reports this.` },
+        ]),
+      ),
+      isEnglish: { type: "boolean" as const, instructions: "Is the guest message written in English?" },
+    },
     abortSignal: AbortSignal.timeout(5_000),
   });
-  return OPTIONS.filter((o) => (answers[o.id]?.probability ?? 0) >= SUGGEST_THRESHOLD).map((o) => o.id);
+  const yes = answers as Record<string, { probability: number } | undefined>;
+  const options = OPTIONS.filter((o) => (yes[o.id]?.probability ?? 0) >= SUGGEST_THRESHOLD).map((o) => o.id);
+  if ((yes.isEnglish?.probability ?? 1) >= 0.5) return { options, english: null };
+  const { output } = await generateText({
+    model: TRANSLATE_MODEL,
+    output: Output.object({ schema: z.object({ english: z.string() }) }),
+    prompt: `Translate this hotel guest message into short, plain English.\n\nMessage: ${text}`,
+    temperature: 0,
+    abortSignal: AbortSignal.timeout(6_000),
+  });
+  return { options, english: output.english.slice(0, 300) };
 }

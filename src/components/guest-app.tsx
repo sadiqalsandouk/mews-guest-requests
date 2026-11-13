@@ -4,14 +4,15 @@ import { TowelsIcon, PillowsIcon, RoomCleaningIcon, SomethingBrokenIcon, Toiletr
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { TranslatedIcon, BackIcon, SignOutIcon, DeptHousekeepingIcon, StatusReceivedIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, DeptFrontDeskIcon, RoomDoorIcon, PauseIcon, PlayIcon, RatingIcon, DeptMaintenanceIcon } from "@/components/icons";
+import { TranslatedIcon, ChevronDownIcon, LoggedByDeskIcon, DeptHousekeepingIcon, StatusReceivedIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, DeptFrontDeskIcon, RoomDoorIcon, PauseIcon, PlayIcon, RatingIcon, DeptMaintenanceIcon } from "@/components/icons";
 
 import { useIsTopWindow } from "@/components/demo-exit";
 import { MewsWordmark } from "@/components/mews-logo";
 import { Button } from "@/components/ui/button";
 import { VoiceTextarea } from "@/components/voice-input";
 import { useCanRecord } from "@/lib/use-recorder";
-import { HOTEL_NAME } from "@/lib/hotel";
+import { HotelBrand } from "@/components/hotel-logo";
+import { DICTS, LANGS, LangContext, isRtl, setLang, useL, useLang, type Lang } from "@/lib/guest-i18n";
 import { OPTIONS, type OptionId } from "@/lib/options";
 import { BAD_TAGS, GOOD_TAGS, canRate, TIP_AMOUNTS, staffName, stepIndex, type Category, type GuestRequest, type Status } from "@/lib/requests";
 import { patchRequest, sendAction, useLive } from "@/lib/use-live";
@@ -44,23 +45,23 @@ const guestText = (r: GuestRequest) => r.original?.text ?? r.text;
 const time = (t?: number) => (t ? new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "");
 
 // Headline + subline for each stage, written for the guest.
-function stageCopy(r: GuestRequest) {
+function stageCopy(r: GuestRequest, L: ReturnType<typeof useL>) {
   const name = staffName(r);
   if (r.reopened && r.status !== "confirmed" && r.status !== "fixed")
-    return { title: `Sending ${name} back`, sub: "Sorry it's not sorted yet. It's now a priority." };
+    return { title: L.sendingBack(name), sub: L.notSortedYet };
   switch (r.status) {
     case "received":
-      return { title: "Request received", sub: "We've got it and we're finding the right person." };
+      return { title: L.receivedTitle, sub: L.receivedSub };
     case "assigned":
-      return { title: `${name} is on it`, sub: `${name} from ${r.category} has your request.` };
+      return { title: L.onIt(name), sub: L.hasIt(name, L.cat[r.category]) };
     case "on_the_way":
-      return { title: `${name} is on the way`, sub: `Heading to room ${r.room} now.` };
+      return { title: L.onTheWayTitle(name), sub: L.heading(r.room) };
     case "fixed":
       return r.guestConfirmedAt
-        ? { title: "Thanks for checking", sub: "Glad it's sorted. The team will close it off." }
-        : { title: "Marked as fixed", sub: "Can you check it's all good?" };
+        ? { title: L.thanksChecking, sub: L.gladSorted }
+        : { title: L.markedFixed, sub: L.checkAllGood };
     case "confirmed":
-      return { title: "All sorted", sub: "Thanks for letting us know. Enjoy your stay." };
+      return { title: L.allSorted, sub: L.enjoyStay };
   }
 }
 
@@ -69,7 +70,14 @@ export function GuestApp() {
   const [guest, setGuest] = useState<Guest | null | undefined>(undefined);
   useEffect(() => {
     let alive = true;
-    fetch("/api/guest/session", { cache: "no-store" })
+    // Guests stay signed in for their stay. For the demo only, /guest?signout
+    // switches guest on this device (a hidden link, not shown in the app).
+    const signOut = new URLSearchParams(window.location.search).has("signout");
+    (signOut
+      ? fetch("/api/guest/session", { method: "DELETE" }).then(() => window.history.replaceState(null, "", "/guest"))
+      : Promise.resolve()
+    )
+      .then(() => fetch("/api/guest/session", { cache: "no-store" }))
       .then((res) => (res.ok ? res.json() : null))
       .then((g) => alive && setGuest(g))
       .catch(() => alive && setGuest(null));
@@ -78,23 +86,88 @@ export function GuestApp() {
     };
   }, []);
 
-  if (guest === undefined) return <p className="px-5 py-5 text-muted-foreground">Loading…</p>;
-  if (!guest) return <SignIn onSignedIn={setGuest} />;
+  const lang = useLang();
   return (
-    <SignedInApp
-      key={guest.room}
-      guest={guest}
-      onSignOut={async () => {
-        await fetch("/api/guest/session", { method: "DELETE" });
-        setGuest(null);
-      }}
-    />
+    // The guest's language for every word on screen; Arabic reads right to left.
+    <LangContext.Provider value={DICTS[lang]}>
+      <div lang={lang} dir={isRtl(lang) ? "rtl" : "ltr"} className="flex h-full min-h-0 flex-1 flex-col">
+        {guest === undefined ? (
+          <p className="px-5 py-5 text-muted-foreground">{DICTS[lang].loading}</p>
+        ) : !guest ? (
+          <SignIn onSignedIn={setGuest} />
+        ) : (
+          <SignedInApp
+            key={guest.room}
+            guest={guest}
+          />
+        )}
+      </div>
+    </LangContext.Provider>
+  );
+}
+
+// Top right on every guest screen: the app in the guest's own language.
+function LangPicker() {
+  const lang = useLang();
+  const L = useL();
+  const [open, setOpen] = useState(false);
+  const current = LANGS.find((l) => l.code === lang) ?? LANGS[0];
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={L.language}
+        className="flex h-8 items-center gap-1.5 rounded-full border bg-background ps-2 pe-1.5 text-xs font-semibold uppercase hover:bg-muted"
+      >
+        <span className="text-base leading-none" aria-hidden>
+          {current.flag}
+        </span>
+        {current.code}
+        <ChevronDownIcon className={cn("size-3.5 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
+          <ul
+            role="listbox"
+            aria-label={L.language}
+            className="absolute end-0 top-10 z-50 w-44 animate-in overflow-hidden rounded-xl border bg-background p-1 shadow-lg duration-150 fade-in zoom-in-95"
+          >
+            {LANGS.map((l) => (
+              <li key={l.code}>
+                <button
+                  role="option"
+                  aria-selected={l.code === lang}
+                  onClick={() => {
+                    setLang(l.code);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-start text-sm hover:bg-muted",
+                    l.code === lang && "bg-muted font-medium",
+                  )}
+                >
+                  <span className="text-lg leading-none" aria-hidden>
+                    {l.flag}
+                  </span>
+                  <span className="flex-1">{l.name}</span>
+                  {l.code === lang && <CheckIcon className="size-4 text-orchid" />}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
   );
 }
 
 /* ---------------- Sign-in: surname + room, like hotel Wi-Fi ---------------- */
 
 function SignIn({ onSignedIn }: { onSignedIn: (g: Guest) => void }) {
+  const L = useL();
   const [surname, setSurname] = useState("");
   const [room, setRoom] = useState("");
   const [error, setError] = useState("");
@@ -111,22 +184,22 @@ function SignIn({ onSignedIn }: { onSignedIn: (g: Guest) => void }) {
     });
     setSending(false);
     if (res.ok) onSignedIn(await res.json());
-    else setError((await res.json().catch(() => ({}))).error ?? "Something went wrong. Try again.");
+    else setError(res.status === 404 ? L.notFound : res.status === 400 ? L.enterBoth : L.genericError);
   };
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-background">
-      <header className="shrink-0 border-b px-5 py-4">
-        <p className="text-sm font-semibold">{HOTEL_NAME}</p>
-        <p className="text-xs text-muted-foreground">Guest requests</p>
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b px-5 py-3">
+        <HotelBrand sub={L.guestRequests} />
+        <LangPicker />
       </header>
       <form onSubmit={submit} className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Welcome</h1>
-          <p className="mt-1 text-muted-foreground">Enter the surname on your booking and your room number.</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{L.welcome}</h1>
+          <p className="mt-1 text-muted-foreground">{L.signInSub}</p>
         </div>
         <label className="flex flex-col gap-1.5 text-sm font-medium">
-          Surname
+          {L.surname}
           <input
             value={surname}
             onChange={(e) => setSurname(e.target.value)}
@@ -137,7 +210,7 @@ function SignIn({ onSignedIn }: { onSignedIn: (g: Guest) => void }) {
           />
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium">
-          Room number
+          {L.roomNumber}
           <input
             value={room}
             onChange={(e) => setRoom(e.target.value.replace(/\D/g, "").slice(0, 4))}
@@ -149,7 +222,7 @@ function SignIn({ onSignedIn }: { onSignedIn: (g: Guest) => void }) {
         </label>
         {error && <p className="text-sm text-dot-red">{error}</p>}
         <Button type="submit" size="lg" className="h-12" disabled={sending || !surname.trim() || !room}>
-          {sending ? "Signing in…" : "Continue"}
+          {sending ? L.signingIn : L.continue}
         </Button>
       </form>
       <footer className="flex shrink-0 flex-col items-center gap-0.5 border-t py-2 text-xs text-muted-foreground">
@@ -162,7 +235,8 @@ function SignIn({ onSignedIn }: { onSignedIn: (g: Guest) => void }) {
   );
 }
 
-function SignedInApp({ guest, onSignOut }: { guest: Guest; onSignOut: () => void }) {
+function SignedInApp({ guest }: { guest: Guest }) {
+  const L = useL();
   const params = useSearchParams();
   const router = useRouter();
   const room = guest.room;
@@ -199,22 +273,28 @@ function SignedInApp({ guest, onSignOut }: { guest: Guest; onSignOut: () => void
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
-      <header className="flex shrink-0 items-center justify-between border-b px-5 py-4">
-        <div>
-          <p className="text-sm font-semibold">{HOTEL_NAME}</p>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <RoomDoorIcon className="size-3.5" aria-hidden /> Room {room} · {guest.surname}
-          </p>
-        </div>
-        {id ? (
-          <Button variant="ghost" size="sm" onClick={() => go(null)}>
-            <BackIcon /> Home
-          </Button>
-        ) : (
-          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={onSignOut}>
-            <SignOutIcon /> Sign out
-          </Button>
+      <header className="flex shrink-0 items-center gap-2 border-b px-5 py-3">
+        {id && (
+          // Round back button, iOS style, before the hotel's logo
+          <button
+            onClick={() => go(null)}
+            aria-label={L.home}
+            title={L.home}
+            className="-ms-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground transition-colors hover:bg-accent active:scale-95"
+          >
+            <ChevronLeftIcon className="size-5 rtl:rotate-180" />
+          </button>
         )}
+        <HotelBrand
+          sub={
+            <span className="flex items-center gap-1.5">
+              <RoomDoorIcon className="size-3.5" aria-hidden /> {L.room(room)} · {guest.surname}
+            </span>
+          }
+        />
+        <div className="ms-auto">
+          <LangPicker />
+        </div>
       </header>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {id ? <Tracker id={id} onRate={rate} /> : <Home room={room} onOpen={go} />}
@@ -235,12 +315,14 @@ function SignedInApp({ guest, onSignOut }: { guest: Guest; onSignOut: () => void
 /* ---------------- Home: live status cards + new request ---------------- */
 
 function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => void }) {
+  const L = useL();
   const canRecord = useCanRecord();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   // What the decision model ticked from the guest's words, and what the guest
   // tapped themselves. A tap always wins over the model.
   const [suggested, setSuggested] = useState<OptionId[]>([]);
+  const [english, setEnglish] = useState<string | null>(null);
   const [tapped, setTapped] = useState<Partial<Record<OptionId, boolean>>>({});
   const [thinking, setThinking] = useState(false);
   const { data: all } = useLive<GuestRequest[]>(API, 2000);
@@ -257,6 +339,7 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
     const t = setTimeout(async () => {
       if (words.length < 3) {
         setSuggested([]);
+        setEnglish(null);
         return;
       }
       setThinking(true);
@@ -266,8 +349,11 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: words }),
         });
-        const { options } = await res.json();
-        if (!stale) setSuggested(Array.isArray(options) ? options : []);
+        const { options, english } = await res.json();
+        if (!stale) {
+          setSuggested(Array.isArray(options) ? options : []);
+          setEnglish(typeof english === "string" && english ? english : null);
+        }
       } catch {
         // Suggestions are a nicety: never get in the guest's way.
       } finally {
@@ -304,6 +390,7 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
     const { ids } = await res.json();
     setText("");
     setSuggested([]);
+    setEnglish(null);
     setTapped({});
     // One request: show its tracker. Several (one per team): show them all here.
     onOpen(ids.length === 1 ? ids[0] : null);
@@ -321,7 +408,7 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
             <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
               {mine.slice(1).map((r) => (
                 <button key={r.id} onClick={() => onOpen(r.id)} className="max-w-full truncate underline-offset-2 hover:underline">
-                  {stageCopy(r).title}: {guestText(r)}
+                  {stageCopy(r, L).title}: {guestText(r)}
                 </button>
               ))}
             </div>
@@ -330,18 +417,27 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
       )}
 
       <section className="flex flex-col gap-1.5">
-        <h1 className="text-2xl font-semibold tracking-tight">{mine.length ? "Anything else?" : "How can we help?"}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{mine.length ? L.anythingElse : L.howCanWeHelp}</h1>
         <VoiceTextarea
           id="req"
           value={text}
           onChange={setText}
           // Guests see their own words; the server translates for staff on send.
           onVoice={(r) => setText(r.transcript)}
-          placeholder={canRecord ? "Tell us in any language, or tap the mic" : "Tell us in any language"}
+          placeholder={canRecord ? L.placeholderMic : L.placeholder}
           rows={2}
         />
+        {english && text.trim() && (
+          // What the team will read: the guest's words, in English
+          <p className="gr-rise flex items-start gap-1.5 rounded-md bg-muted px-2.5 py-1.5 text-xs">
+            <TranslatedIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+            <span>
+              <span className="text-muted-foreground">{L.inEnglish}</span> <span dir="ltr">{english}</span>
+            </span>
+          </p>
+        )}
         <p className="h-4 text-xs text-muted-foreground" aria-live="polite">
-          {thinking ? "Reading your message…" : fromWords ? "We ticked what you asked for. Tap to change." : "Or tap what you need:"}
+          {thinking ? L.reading : fromWords ? L.ticked : L.orTap}
         </p>
       </section>
 
@@ -350,7 +446,7 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
           const items = OPTIONS.filter((o) => o.group === name);
           return (
             <div key={name} className="flex flex-col gap-1.5">
-              <h2 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{name}</h2>
+              <h2 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{L.groups[name]}</h2>
               <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
                 {items.map((o) => {
                   const Icon = OPTION_ICON[o.id];
@@ -372,7 +468,7 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
                         </span>
                       )}
                       <Icon className="size-5 shrink-0" />
-                      <span className="w-full truncate">{o.short}</span>
+                      <span className="w-full truncate">{L.tiles[o.id]}</span>
                     </button>
                   );
                 })}
@@ -383,8 +479,11 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
       </section>
 
       <Button size="lg" className="mt-auto h-11 w-full shrink-0 text-base" disabled={(!text.trim() && !selected.length) || sending} onClick={submit}>
-        {sending ? "Sending…" : selected.length > 1 ? `Send request · ${selected.length} items` : "Send request"}
+        {sending ? L.sending : selected.length > 1 ? L.sendItems(selected.length) : L.send}
       </Button>
+      <p className="-mt-1 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+        <LoggedByDeskIcon className="size-3.5" aria-hidden /> {L.dialBefore} <b className="text-foreground">0</b> {L.dialAfter}
+      </p>
     </div>
   );
 }
@@ -392,7 +491,8 @@ function Home({ room, onOpen }: { room: string; onOpen: (id: string | null) => v
 // Slim live card, like the pinned order tracker in Uber Eats. Rating is
 // prompted separately (the sheet pops up), so the card stays one line.
 function StatusCard({ r, onOpen }: { r: GuestRequest; onOpen: () => void }) {
-  const copy = stageCopy(r);
+  const L = useL();
+  const copy = stageCopy(r, L);
   const Icon = DEPT_ICON[r.category];
   const done = r.status === "confirmed";
   return (
@@ -408,8 +508,14 @@ function StatusCard({ r, onOpen }: { r: GuestRequest; onOpen: () => void }) {
         <span className="min-w-0 flex-1">
           <span key={r.status} className="gr-rise block truncate text-sm font-semibold">{copy.title}</span>
           <span dir="auto" className="block truncate text-xs text-muted-foreground">{guestText(r)}</span>
+          {r.original && (
+            // What the team sees, in English
+            <span className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+              <TranslatedIcon className="size-3 shrink-0" /> <span dir="ltr" className="truncate">{r.text}</span>
+            </span>
+          )}
         </span>
-        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground rtl:rotate-180" />
       </span>
       <ProgressBar r={r} />
     </button>
@@ -446,6 +552,7 @@ function ProgressBar({ r, large = false }: { r: GuestRequest; large?: boolean })
 /* ---------------- Full tracker ---------------- */
 
 function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
+  const L = useL();
   const { data: r, refresh, missing } = useLive<GuestRequest>(`${API}/${id}`, 1500);
   const now = useNow(15_000);
 
@@ -453,13 +560,13 @@ function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
   if (missing)
     return (
       <div className="px-5 py-5">
-        <h1 className="text-2xl font-semibold tracking-tight">This request was removed</h1>
-        <p className="mt-1 text-muted-foreground">The team closed it off. You can send a new one any time.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{L.removedTitle}</h1>
+        <p className="mt-1 text-muted-foreground">{L.removedSub}</p>
       </div>
     );
-  if (!r) return <p className="px-5 py-5 text-muted-foreground">Loading…</p>;
+  if (!r) return <p className="px-5 py-5 text-muted-foreground">{L.loading}</p>;
 
-  const copy = stageCopy(r);
+  const copy = stageCopy(r, L);
   const done = r.status === "confirmed";
   const answer = async (action: "guestConfirm" | "reopen") => {
     await sendAction(r.id, action, API);
@@ -481,8 +588,8 @@ function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
       {r.safety && r.status !== "confirmed" && (
         // Safety words skip the queue: tell the guest to call, don't make them wait on an app.
         <div className="gr-pop rounded-lg border-l-4 border-dot-red bg-muted p-4">
-          <p className="font-semibold">If anyone is in danger, call reception now.</p>
-          <p className="text-sm text-muted-foreground">We&apos;ve alerted the duty manager and someone is coming now.</p>
+          <p className="font-semibold">{L.dangerTitle}</p>
+          <p className="text-sm text-muted-foreground">{L.dangerSub}</p>
         </div>
       )}
 
@@ -491,10 +598,10 @@ function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
       {!done && r.status !== "fixed" && r.dueBy && (
         <p className="text-sm">
           {late ? (
-            <span className="text-dot-red">Taking longer than planned. The duty manager has been told.</span>
+            <span className="text-dot-red">{L.takingLonger}</span>
           ) : (
             <>
-              <span className="text-muted-foreground">We aim to sort this by </span>
+              <span className="text-muted-foreground">{L.aimBy} </span>
               <span className="font-semibold tabular-nums">{time(r.dueBy)}</span>
             </>
           )}
@@ -504,13 +611,13 @@ function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
       {r.status === "fixed" && !r.guestConfirmedAt && (
         // The guest's answer goes to the team; staff close the request.
         <div className="gr-pop rounded-lg border bg-orchid-tint p-4">
-          <p className="mb-3 font-semibold">Is it fixed?</p>
+          <p className="mb-3 font-semibold">{L.isItFixed}</p>
           <div className="flex gap-2">
             <Button size="lg" className="flex-1" onClick={() => answer("guestConfirm")}>
-              Yes, all good
+              {L.yesAllGood}
             </Button>
             <Button variant="outline" size="lg" className="flex-1 bg-background" onClick={() => answer("reopen")}>
-              Not yet
+              {L.notYet}
             </Button>
           </div>
         </div>
@@ -535,13 +642,13 @@ function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
             <p className="mt-1 flex items-start gap-1.5 text-sm text-muted-foreground">
               <TranslatedIcon className="mt-0.5 size-3.5 shrink-0" />
               <span>
-                Sent to the team in English: <span className="text-foreground">“{r.text}”</span>
+                {L.sentInEnglish} <span dir="ltr" className="text-foreground">“{r.text}”</span>
               </span>
             </p>
           )}
           <p className="text-sm text-muted-foreground">
-            {stepIndex(r.status) >= 1 ? `${staffName(r)} · ${r.category}` : r.category}
-            {r.source === "staff" && " · logged by the front desk"}
+            {stepIndex(r.status) >= 1 ? `${staffName(r)} · ${L.cat[r.category]}` : L.cat[r.category]}
+            {r.source === "staff" && ` · ${L.loggedByDesk}`}
           </p>
         </div>
       </div>
@@ -552,11 +659,11 @@ function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
           const at = r.stepAt?.[s] ?? (s === "received" ? r.createdAt : undefined);
           const reached = stepIndex(r.status) >= stepIndex(s);
           const label = {
-            received: "Request received",
-            assigned: `Passed to ${staffName(r)}`,
-            on_the_way: "On the way",
-            fixed: "Marked as fixed",
-            confirmed: "Closed by the team",
+            received: L.stepReceived,
+            assigned: L.stepPassed(staffName(r)),
+            on_the_way: L.stepOnTheWay,
+            fixed: L.stepFixed,
+            confirmed: L.stepClosed,
           }[s];
           return (
             <li key={s} className={cn("flex items-center gap-3", !reached && "text-muted-foreground")}>
@@ -575,7 +682,6 @@ function Tracker({ id, onRate }: { id: string; onRate: RateFn }) {
 // Pops up by itself when a request is done, asks about a named person,
 // one tap to rate, then quick tags and an optional comment. Easy to skip.
 
-const RATING_WORDS = ["", "Poor", "Not great", "OK", "Good", "Excellent"];
 
 type RateFn = (id: string, stars: number) => void;
 
@@ -604,14 +710,15 @@ function RateStars({ r, onRate, size = "size-7" }: { r: GuestRequest; onRate: Ra
 
 // Inline in the tracker: the ask before rating, a thank-you after.
 function RateInline({ r, onRate }: { r: GuestRequest; onRate: RateFn }) {
+  const L = useL();
   const name = staffName(r);
   if (r.rating) {
     return (
       <div className="gr-rise flex flex-col gap-1 rounded-lg border p-4">
         <Stars value={r.rating} />
-        <p className="mt-1 font-medium">Thanks for rating {name}</p>
+        <p className="mt-1 font-medium">{L.thanksRating(name)}</p>
         <p className="text-sm text-muted-foreground">
-          {r.rating <= 3 ? "Sorry it wasn't better. The duty manager will be in touch." : `We've passed it on to ${name}.`}
+          {r.rating <= 3 ? L.sorryDM : L.passedOn(name)}
         </p>
       </div>
     );
@@ -621,7 +728,7 @@ function RateInline({ r, onRate }: { r: GuestRequest; onRate: RateFn }) {
       <span className="flex size-12 items-center justify-center rounded-full bg-foreground text-lg font-semibold text-background">
         {name[0]}
       </span>
-      <p className="font-semibold">How was {name}&apos;s help?</p>
+      <p className="font-semibold">{L.howWas(name)}</p>
       <RateStars r={r} onRate={onRate} size="size-8" />
     </div>
   );
@@ -636,6 +743,7 @@ function RatingSheet({
   initial: number;
   onClose: () => void;
 }) {
+  const L = useL();
   const name = staffName(r);
   const [stars, setStars] = useState(initial);
   const [hover, setHover] = useState(0);
@@ -689,14 +797,14 @@ function RatingSheet({
               <span className="gr-pop flex size-14 items-center justify-center rounded-full bg-dot-green text-white">
                 <CheckIcon className="size-7" />
               </span>
-              <p className="text-lg font-semibold">Thanks for your feedback</p>
+              <p className="text-lg font-semibold">{L.thanksFeedback}</p>
               <p className="text-sm text-muted-foreground">
-                {good ? `We'll pass it on to ${name}.` : "Sorry it wasn't better. The duty manager will be in touch."}
+                {good ? L.willPass(name) : L.sorryDM}
               </p>
             </div>
             {good && <TipCard r={r} />}
             <Button variant="ghost" onClick={onClose}>
-              Done
+              {L.done}
             </Button>
           </div>
         ) : (
@@ -705,7 +813,7 @@ function RatingSheet({
               <span className="gr-pop flex size-14 items-center justify-center rounded-full bg-foreground text-xl font-semibold text-background">
                 {name[0]}
               </span>
-              <p className="text-xl font-semibold tracking-tight">How was {name}&apos;s help?</p>
+              <p className="text-xl font-semibold tracking-tight">{L.howWas(name)}</p>
               <p dir="auto" className="line-clamp-1 text-sm text-muted-foreground">{guestText(r)}</p>
             </div>
 
@@ -729,12 +837,12 @@ function RatingSheet({
                   </button>
                 ))}
               </div>
-              <p className="h-5 text-sm font-medium text-muted-foreground">{RATING_WORDS[shown]}</p>
+              <p className="h-5 text-sm font-medium text-muted-foreground">{L.ratingWords[shown]}</p>
             </div>
 
             {stars > 0 && (
               <div key={good ? "good" : "bad"} className="gr-rise flex flex-col gap-3">
-                <p className="text-sm font-medium">{good ? "What went well?" : "What went wrong?"}</p>
+                <p className="text-sm font-medium">{good ? L.wentWell : L.wentWrong}</p>
                 <div className="flex flex-wrap gap-2">
                   {options.map((t) => {
                     const on = tags.includes(t);
@@ -748,7 +856,7 @@ function RatingSheet({
                           on ? "border-foreground bg-foreground text-background" : "hover:bg-muted",
                         )}
                       >
-                        {t}
+                        {L.tags[t] ?? t}
                       </button>
                     );
                   })}
@@ -758,7 +866,7 @@ function RatingSheet({
                   rows={2}
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  placeholder={good ? "Anything else to add? (optional)" : "Tell us more (optional)"}
+                  placeholder={good ? L.anythingToAdd : L.tellMore}
                   className="w-full resize-none rounded-md border border-input bg-background p-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 />
               </div>
@@ -766,10 +874,10 @@ function RatingSheet({
 
             <div className="flex flex-col gap-1">
               <Button size="lg" className="h-11 text-base" disabled={!stars || phase === "sending"} onClick={submit}>
-                {phase === "sending" ? "Sending…" : "Submit"}
+                {phase === "sending" ? L.sending : L.submit}
               </Button>
               <Button variant="ghost" onClick={onClose}>
-                Not now
+                {L.notNow}
               </Button>
             </div>
           </div>
@@ -784,6 +892,7 @@ function RatingSheet({
 
 // Mock Apple Pay tip, for guests who want to tip but carry no cash. No money moves.
 function TipCard({ r }: { r: GuestRequest }) {
+  const L = useL();
   const name = staffName(r);
   const [amount, setAmount] = useState<number | null>(null);
   const [phase, setPhase] = useState<"pick" | "paying" | "sent">(r.tip ? "sent" : "pick");
@@ -803,7 +912,7 @@ function TipCard({ r }: { r: GuestRequest }) {
           <CheckIcon className="size-5" />
         </span>
         <p className="text-sm">
-          <span className="font-semibold">£{amount ?? r.tip} tip sent to {name}.</span> Thank you!
+          <span className="font-semibold">{L.tipSent(amount ?? r.tip ?? 0, name)}</span> {L.thankYou}
         </p>
       </div>
     );
@@ -811,8 +920,8 @@ function TipCard({ r }: { r: GuestRequest }) {
   return (
     <div className="gr-rise flex flex-col gap-3 rounded-lg border p-4">
       <div>
-        <p className="font-semibold">Leave {name} a tip?</p>
-        <p className="text-sm text-muted-foreground">No cash needed. Optional.</p>
+        <p className="font-semibold">{L.tipAsk(name)}</p>
+        <p className="text-sm text-muted-foreground">{L.noCash}</p>
       </div>
       <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Tip amount">
         {TIP_AMOUNTS.map((a) => (
@@ -836,9 +945,9 @@ function TipCard({ r }: { r: GuestRequest }) {
         disabled={!amount || phase === "paying"}
         className="flex h-11 items-center justify-center rounded-md bg-black text-base font-medium text-white transition-opacity disabled:opacity-40"
       >
-        {phase === "paying" ? "Paying…" : amount ? `Pay £${amount} with Apple Pay` : "Pay with Apple Pay"}
+        {phase === "paying" ? L.paying : L.payWith(amount ?? undefined)}
       </button>
-      <p className="text-center text-xs text-muted-foreground">Demo: no money is taken.</p>
+      <p className="text-center text-xs text-muted-foreground">{L.demoNoMoney}</p>
     </div>
   );
 }
@@ -915,7 +1024,7 @@ function StepperPanel({ r }: { r: GuestRequest }) {
   });
 
   return (
-    <div className="fixed top-16 left-4 z-50 flex w-52 flex-col gap-2 rounded-xl border bg-background/95 p-3 text-xs shadow-sm backdrop-blur max-sm:hidden">
+    <div dir="ltr" lang="en" className="fixed top-16 left-4 z-50 flex w-52 flex-col gap-2 rounded-xl border bg-background/95 p-3 text-xs shadow-sm backdrop-blur max-sm:hidden">
       <p className="font-medium text-muted-foreground">Demo · guest journey</p>
       <p dir="auto" className="truncate text-muted-foreground">{r.text}</p>
       <div className="flex items-center gap-1">

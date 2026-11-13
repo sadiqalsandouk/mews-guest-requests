@@ -8,6 +8,7 @@ import { RequestsBoardIcon, MenuIcon, ResetDemoIcon, SettingsIcon, GuestViewIcon
 import { MewsWordmark } from "@/components/mews-logo";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { HOTEL_NAME } from "@/lib/hotel";
+import { HotelLogo } from "@/components/hotel-logo";
 import { removeAllRequests } from "@/lib/use-live";
 import { cn } from "@/lib/utils";
 
@@ -75,7 +76,9 @@ export function AppNav() {
 
           <div className="border-b px-4 py-3">
             <p className="text-xs text-muted-foreground">Property</p>
-            <p className="font-medium">{HOTEL_NAME}</p>
+            <p className="flex items-center gap-2 font-medium">
+              <HotelLogo className="size-6" /> {HOTEL_NAME}
+            </p>
           </div>
 
           <nav className="flex flex-1 flex-col gap-1 p-3" aria-label="Main">

@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { HOTEL_NAME } from "@/lib/hotel";
+import { HotelLogo } from "@/components/hotel-logo";
 
 // Top right: who's signed in and which property. Pages live in the hamburger.
 export function HotelMenu() {
@@ -24,6 +25,7 @@ export function HotelMenu() {
         <span className="flex size-7 items-center justify-center rounded-full bg-orchid-tint text-xs font-semibold" aria-hidden>
           DM
         </span>
+        <HotelLogo className="size-6 max-sm:hidden" />
         <span className="max-sm:sr-only">{HOTEL_NAME}</span>
         <ChevronDownIcon className="size-4 text-muted-foreground" />
       </DropdownMenuTrigger>
@@ -39,6 +41,7 @@ export function HotelMenu() {
         <DropdownMenuGroup>
           <DropdownMenuLabel>Property</DropdownMenuLabel>
           <DropdownMenuItem>
+            <HotelLogo className="size-5" />
             <span className="flex-1">{HOTEL_NAME}</span>
             <CheckIcon className="text-orchid" />
           </DropdownMenuItem>

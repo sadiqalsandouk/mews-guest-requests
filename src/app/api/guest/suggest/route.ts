@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ options: [] });
   }
   try {
-    return NextResponse.json({ options: await suggestOptions(text.trim().slice(0, 500)) });
+    return NextResponse.json(await suggestOptions(text.trim().slice(0, 500)));
   } catch (e) {
     console.error("[guest/suggest]", e);
     return NextResponse.json({ options: [] });

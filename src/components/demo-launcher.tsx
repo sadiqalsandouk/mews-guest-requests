@@ -3,8 +3,8 @@
 import { useState, useSyncExternalStore } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
+import { HotelWordmark } from "@/components/hotel-logo";
 import { MewsWordmark } from "@/components/mews-logo";
-import { HOTEL_NAME } from "@/lib/hotel";
 
 const noop = () => () => {};
 const getOrigin = () => window.location.origin;
@@ -24,7 +24,9 @@ export function DemoLauncher() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-8 bg-background p-6 text-center">
       <div>
-        <p className="text-sm font-medium text-muted-foreground">{HOTEL_NAME}</p>
+        <div className="mb-5">
+          <HotelWordmark />
+        </div>
         <h1 className="mt-1 text-4xl font-semibold tracking-tight">Need anything?</h1>
         <p className="mt-2 text-lg text-muted-foreground">Scan to ask, then follow it live.</p>
       </div>
