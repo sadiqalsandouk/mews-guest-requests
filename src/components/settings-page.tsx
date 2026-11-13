@@ -33,6 +33,7 @@ export function SettingsPage() {
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [section, setSection] = useState<(typeof SECTIONS)[number]["id"]>("escalation");
+  const [demoDone, setDemoDone] = useState<string | null>(null);
 
   const current = saved?.limits;
   const value = (c: Category) => draft[c] ?? String(current?.[c] ?? "");
@@ -190,23 +191,36 @@ export function SettingsPage() {
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">Demo data</h1>
               <p className="mt-1 text-muted-foreground">
-                Puts the requests and settings back to the starting point. Handy before a run-through.
+                The demo starts with a blank board. Load sample requests if you want a busy hotel to show.
               </p>
             </div>
-            <div>
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={async () => {
-                  await fetch("/api/reset", { method: "POST" });
-                  setDraft({});
-                  setStatus("idle");
-                  refresh();
-                }}
-              >
-                <ResetDemoIcon /> Reset demo data
-              </Button>
+            <div className="flex flex-wrap gap-3">
+              {[
+                { label: "Clear to a blank board", samples: false },
+                { label: "Load sample data", samples: true },
+              ].map(({ label, samples }) => (
+                <Button
+                  key={label}
+                  variant={samples ? "default" : "outline"}
+                  size="lg"
+                  onClick={async () => {
+                    await fetch(samples ? "/api/reset?samples=1" : "/api/reset", { method: "POST" });
+                    setDraft({});
+                    setStatus("idle");
+                    refresh();
+                    setDemoDone(label);
+                    setTimeout(() => setDemoDone(null), 2500);
+                  }}
+                >
+                  <ResetDemoIcon /> {label}
+                </Button>
+              ))}
             </div>
+            {demoDone && (
+              <span className="flex items-center gap-1 text-sm text-dot-green">
+                <CheckIcon className="size-4" /> Done: {demoDone.toLowerCase()}.
+              </span>
+            )}
           </section>
         )}
       </div>

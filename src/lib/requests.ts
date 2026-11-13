@@ -437,8 +437,8 @@ export function clearRequests() {
   store.requests = [];
 }
 
-export function resetStore() {
-  Object.assign(store, emptyStore());
+export function resetStore(withSamples = false) {
+  Object.assign(store, withSamples ? mockStore() : emptyStore());
 }
 
 // For the hosted demo (see lib/store-sync.ts): the same mock data, saved
